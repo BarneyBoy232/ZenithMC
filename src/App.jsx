@@ -1,26 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Server, Terminal, Play, Copy, CheckCircle, Globe } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, Terminal, Play, Globe } from 'lucide-react';
 
 export default function App() {
-  const [copied, setCopied] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [activeServers, setActiveServers] = useState([]);
-  const [isLoadingServers, setIsLoadingServers] = useState(true);
-
-  const copyToClipboard = (text) => {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-      document.execCommand('copy');
-      setCopied(text);
-      setTimeout(() => setCopied(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy', err);
-    }
-    document.body.removeChild(textArea);
-  };
 
   const handleDownload = () => {
     setIsDownloading(true);
@@ -28,57 +10,26 @@ export default function App() {
     // When you have the .exe, change the button to an <a> tag pointing to /ZenithHost.exe
   };
 
-  // Actively ping the Command Center for real servers
-  useEffect(() => {
-    const fetchLiveServers = async () => {
-      try {
-        const response = await fetch('https://api.zenithurl.com/live-servers'); 
-        const data = await response.json();
-        setActiveServers(data.servers || []);
-      } catch (err) {
-        // Fails gracefully if the API is offline
-        setActiveServers([]);
-      } finally {
-        setIsLoadingServers(false);
-      }
-    };
-
-    fetchLiveServers();
-    const interval = setInterval(fetchLiveServers, 30000); // Update list every 30s
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-emerald-500/30">
       {/* Navbar */}
       <nav className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-center">
           <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
             <Globe className="text-emerald-500" />
             <span>mc.zenithurl.com</span>
           </div>
-          <button className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
-            Command Center Login
-          </button>
         </div>
       </nav>
 
       {/* Hero Section */}
       <header className="max-w-6xl mx-auto px-4 py-24 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-8 border border-emerald-500/20">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          Distributed Network Active
-        </div>
-        
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">
           Host on your PC.<br />Share like a Pro.
         </h1>
         
         <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10">
-          Turn your spare RAM into a professional Minecraft server. Download the ZenithHost app, pick a name, and get a clean URL instantly. No port forwarding required.
+          Turn your spare RAM into a professional Minecraft server. Download the ZenithHost app, pick a name, and get a clean URL instantly.
         </p>
         
         <button 
@@ -92,7 +43,6 @@ export default function App() {
           )}
           {isDownloading ? 'Downloading...' : 'Download ZenithHost for Windows'}
         </button>
-        <p className="text-sm text-slate-500 mt-4">Requires Java 21 • v1.0.0 Beta</p>
       </header>
 
       {/* How it Works */}
@@ -143,68 +93,9 @@ export default function App() {
         </div>
       </section>
 
-      {/* Live Server Network */}
-      <section className="py-24 max-w-4xl mx-auto px-4">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold mb-2">Live Network Status</h2>
-            <p className="text-slate-400">Servers currently being hosted by the community.</p>
-          </div>
-          <Server className="text-slate-700 w-12 h-12" />
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-          {isLoadingServers ? (
-             <div className="p-12 text-center text-slate-500 animate-pulse">
-               Scanning distributed network for active servers...
-             </div>
-          ) : activeServers.map((server, idx) => {
-            const url = `${server.name}.mc.zenithurl.com`;
-            const isCopied = copied === url;
-            
-            return (
-              <div 
-                key={server.name} 
-                className={`p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors hover:bg-slate-800/50 ${idx !== activeServers.length - 1 ? 'border-b border-slate-800' : ''}`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                    <Server size={20} className="text-emerald-500" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-lg">{server.name}</div>
-                    <div className="text-sm text-slate-500 font-mono hidden sm:block">via bore.pub tunnel</div>
-                  </div>
-                </div>
-
-                <div className="w-full sm:w-auto flex items-center gap-3">
-                  <div className="flex-1 sm:flex-none bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 font-mono text-sm text-slate-300 flex items-center justify-between gap-4">
-                    <span className="truncate">{url}</span>
-                    <button 
-                      onClick={() => copyToClipboard(url)}
-                      className="text-slate-500 hover:text-emerald-400 transition-colors shrink-0"
-                      title="Copy URL"
-                    >
-                      {isCopied ? <CheckCircle size={16} className="text-emerald-400" /> : <Copy size={16} />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          
-          {!isLoadingServers && activeServers.length === 0 && (
-            <div className="p-12 text-center text-slate-500">
-              No servers are currently online. Download the app to start yours!
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="border-t border-slate-800 py-12 text-center text-slate-500 text-sm">
         <p>© 2026 ZenithURL Distributed Hosting.</p>
-        <p className="mt-2 text-slate-600">Not affiliated with Mojang or Microsoft.</p>
       </footer>
     </div>
   );
