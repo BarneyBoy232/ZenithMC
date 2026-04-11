@@ -77,7 +77,7 @@ export default function App() {
           Distributed Network Active
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">
+        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-linear-to-br from-white to-slate-400 bg-clip-text text-transparent">
           Host on your PC.<br />Share like a Pro.
         </h1>
         
