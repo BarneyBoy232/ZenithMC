@@ -1,0 +1,8 @@
+api/
+venv/
+.venv/
+*.py
+requirements.txt
+setup.py
+pyproject.toml
+.python-version
