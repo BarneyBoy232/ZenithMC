@@ -22,19 +22,23 @@ def init_db():
 init_db()
 
 def clean_old_dns(subdomain):
-    """Finds and deletes existing SRV records to prevent stacking."""
+    """Finds and deletes ALL existing SRV records to prevent stacking."""
     base_url = f"https://api.cloudflare.com/client/v4/zones/{ZONE_ID}/dns_records"
     headers = {"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": "application/json"}
     
-    srv_name = f"_minecraft._tcp.{subdomain}.mc.zenithurl.com"
-    try:
-        # Fetch existing records
-        res = requests.get(f"{base_url}?type=SRV&name={srv_name}", headers=headers).json()
-        for record in res.get('result', []):
-            # Delete them
-            requests.delete(f"{base_url}/{record['id']}", headers=headers)
-    except Exception as e:
-        print(f"[CLEANUP ERROR] {e}")
+    # Check for BOTH the correct prefixed name and the old broken name formats
+    names_to_check = [
+        f"_minecraft._tcp.{subdomain}.mc.zenithurl.com",
+        f"{subdomain}.mc.zenithurl.com" 
+    ]
+    
+    for srv_name in names_to_check:
+        try:
+            res = requests.get(f"{base_url}?type=SRV&name={srv_name}", headers=headers).json()
+            for record in res.get('result', []):
+                requests.delete(f"{base_url}/{record['id']}", headers=headers)
+        except Exception as e:
+            print(f"[CLEANUP ERROR] {e}")
 
 def update_dns_records(subdomain, port):
     clean_old_dns(subdomain) # Automatically wipe old records first!
