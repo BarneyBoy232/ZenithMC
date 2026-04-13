@@ -1,11 +1,4 @@
-<<<<<<< HEAD
 flask
 flask-cors
 requests
 gunicorn
-=======
-flask
-flask-cors
-requests
-gunicorn
->>>>>>> a124899dc359e801debef14304216edebc4795a5
