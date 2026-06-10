@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { MinecraftServer } from './mcServer.mjs';
 import { LocalRegistry } from './registry.mjs';
 import { startProxy } from './proxy.mjs';
+import { SessionTracker } from './analytics.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -40,6 +41,7 @@ async function main() {
   const registry = new LocalRegistry(join(ROOT, 'servers', '_registry'));
 
   const mc = new MinecraftServer({ name: room, dir, port, memoryMb: mem });
+  const sessions = new SessionTracker();
 
   mc.on('log', (line) => process.stdout.write(`[mc] ${line}\n`));
 
@@ -59,13 +61,20 @@ async function main() {
   });
 
   mc.on('player-join', async ({ name, count }) => {
+    sessions.join(name, Date.now());
     console.log(`👤 ${name} joined  (${count} online)`);
     await registry.updatePlayers(room, { count, players: [...mc.players] });
   });
 
   mc.on('player-leave', async ({ name, count }) => {
-    console.log(`👋 ${name} left  (${count} online)`);
+    const session = sessions.leave(name, Date.now());
+    if (session) {
+      const mins = (session.durationMs / 60000).toFixed(1);
+      console.log(`👋 ${name} left  (${count} online, played ${mins} min)`);
+    }
     await registry.updatePlayers(room, { count, players: [...mc.players] });
+    // (admin feed) overall rollups — streamed to the admin path in the Firebase build
+    console.log('   ↳ analytics:', JSON.stringify(sessions.summary()));
   });
 
   mc.on('stopped', async () => {
