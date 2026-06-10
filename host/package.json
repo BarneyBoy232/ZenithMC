@@ -1,0 +1,16 @@
+{
+  "name": "zenithmc-host",
+  "version": "0.1.0",
+  "description": "ZenithMC host app — launches Minecraft servers and bridges them to friends over a direct P2P link.",
+  "type": "module",
+  "bin": {
+    "zenithmc-host": "src/index.mjs"
+  },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/registry.mjs && node --check src/proxy.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

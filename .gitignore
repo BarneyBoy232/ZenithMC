@@ -12,6 +12,19 @@ dist
 dist-ssr
 *.local
 
+# ZenithMC host app — Minecraft server runtime (generated per-host, never committed)
+host/servers/
+*.jar
+eula.txt
+world/
+world_nether/
+world_the_end/
+# Secrets
+.env
+.env.*
+serviceAccount*.json
+firebase-*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
