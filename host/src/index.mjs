@@ -3,22 +3,22 @@
 //
 // Usage:  node src/index.mjs <room-name> [--port 25565] [--mem 2048]
 //
-// What it does end to end:
+// End to end:
 //   1. launches a Paper Minecraft server in host/servers/<room>/
-//   2. opens the proxy seam (where the P2P link will attach)
-//   3. publishes the room to the registry (local file now, Firebase later)
-//   4. streams player join/leave events -> registry + console (your analytics feed)
+//   2. publishes the room to the backend phone-book
+//   3. accepts direct P2P connections from friends -> bridges them to the server
+//   4. streams player join/leave + completed sessions (analytics)
 
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { MinecraftServer } from './mcServer.mjs';
-import { LocalRegistry } from './registry.mjs';
-import { startProxy } from './proxy.mjs';
 import { SessionTracker } from './analytics.mjs';
 import { backend } from './backend.mjs';
+import { startHostP2P } from './p2p.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
+const API = process.env.ZMC_API ?? 'https://api.zenithurl.com';
 
 function parseArgs(argv) {
   const [room, ...rest] = argv;
@@ -38,60 +38,43 @@ async function main() {
   }
 
   const dir = join(ROOT, 'servers', room);
-  const edgePort = port + 1000; // the proxy "edge" the P2P transport will own
-  const registry = new LocalRegistry(join(ROOT, 'servers', '_registry'));
-
   const mc = new MinecraftServer({ name: room, dir, port, memoryMb: mem });
   const sessions = new SessionTracker();
+  let p2p = null;
 
   mc.on('log', (line) => process.stdout.write(`[mc] ${line}\n`));
 
   mc.on('ready', async () => {
-    startProxy({ listenPort: edgePort, targetPort: port });
-    const endpoint = `edge:${edgePort}`; // P2P endpoint id the connector dials
-    await registry.publish(room, {
-      address: endpoint,
-      motd: mc.motd,
-      version: mc.version,
-      playerCount: 0,
-      players: [],
-    });
-    await backend.publish(room, { endpoint, motd: mc.motd, version: mc.version });
-    console.log(`\n✅ Room "${room}" is live.`);
-    console.log(`   MC server : 127.0.0.1:${port}`);
-    console.log(`   Proxy edge: 127.0.0.1:${edgePort}  (P2P attaches here)`);
-    console.log(`   Registry  : host/servers/_registry/${room}.json\n`);
+    p2p = startHostP2P({ room, targetPort: port, apiBase: API });
+    await backend.publish(room, { endpoint: `p2p:${room}`, motd: mc.motd, version: mc.version });
+    console.log(`\n✅ Room "${room}" is live (direct P2P).`);
+    console.log(`   Share: ${room}.mc.zenithurl.com\n`);
   });
 
   mc.on('player-join', async ({ name, count }) => {
     sessions.join(name, Date.now());
     console.log(`👤 ${name} joined  (${count} online)`);
-    await registry.updatePlayers(room, { count, players: [...mc.players] });
     await backend.players(room, count);
   });
 
   mc.on('player-leave', async ({ name, count }) => {
-    const session = sessions.leave(name, Date.now());
-    if (session) {
-      const mins = (session.durationMs / 60000).toFixed(1);
-      console.log(`👋 ${name} left  (${count} online, played ${mins} min)`);
-      await backend.session({ room, ...session }); // admin analytics feed
+    const s = sessions.leave(name, Date.now());
+    if (s) {
+      console.log(`👋 ${name} left  (${count} online, played ${(s.durationMs / 60000).toFixed(1)} min)`);
+      await backend.session({ room, ...s });
     }
-    await registry.updatePlayers(room, { count, players: [...mc.players] });
     await backend.players(room, count);
-    console.log('   ↳ analytics:', JSON.stringify(sessions.summary()));
   });
 
   mc.on('stopped', async () => {
-    await registry.takedown(room);
+    p2p?.stop();
     await backend.takedown(room);
     console.log('Server stopped, room taken offline.');
     process.exit(0);
   });
 
-  const shutdown = () => mc.stop();
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => mc.stop());
+  process.on('SIGTERM', () => mc.stop());
 
   console.log(`Starting room "${room}" (downloading Paper on first run)…`);
   await mc.start();

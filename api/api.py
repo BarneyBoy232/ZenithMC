@@ -38,6 +38,7 @@ class MemoryStore:
     def __init__(self):
         self.rooms = {}
         self.sessions = []
+        self.signals = {}  # (room, session) -> {"friend": [...], "host": [...]}
 
     def upsert_room(self, name, data):
         self.rooms[name] = {**self.rooms.get(name, {}), **data, "room": name}
@@ -53,6 +54,19 @@ class MemoryStore:
 
     def add_session(self, session):
         self.sessions.append(session)
+
+    # --- WebRTC signaling mailbox (one box per friend<->host connection) ---
+    def signal_post(self, room, session, role, msg):
+        box = self.signals.setdefault((room, session), {"friend": [], "host": []})
+        box[role].append(msg)
+
+    def signal_get(self, room, session, reader):
+        other = "host" if reader == "friend" else "friend"
+        box = self.signals.get((room, session))
+        return list(box[other]) if box else []
+
+    def pending_sessions(self, room):
+        return [s for (r, s), box in self.signals.items() if r == room and box["friend"]]
 
 
 class FirestoreStore:
@@ -76,6 +90,30 @@ class FirestoreStore:
 
     def add_session(self, session):
         self.col.add({**session, "kind": "session"})
+
+    # --- WebRTC signaling mailbox ---
+    def _sig_doc(self, room, session):
+        return self.col.document(f"sig_{room}_{session}")
+
+    def signal_post(self, room, session, role, msg):
+        from firebase_admin import firestore
+        flag = "has_friend" if role == "friend" else "has_host"
+        # Messages stored as JSON strings so ArrayUnion dedupes reliably.
+        self._sig_doc(room, session).set({
+            "kind": "signal", "room": room, "session": session, flag: True,
+            role: firestore.ArrayUnion([json.dumps(msg)]),
+        }, merge=True)
+
+    def signal_get(self, room, session, reader):
+        other = "host" if reader == "friend" else "friend"
+        doc = self._sig_doc(room, session).get()
+        data = doc.to_dict() if doc.exists else {}
+        return [json.loads(x) for x in (data.get(other) or [])]
+
+    def pending_sessions(self, room):
+        q = (self.col.where("kind", "==", "signal")
+             .where("room", "==", room).where("has_friend", "==", True))
+        return [d.to_dict().get("session") for d in q.stream()]
 
 
 def make_store():
@@ -155,6 +193,37 @@ def session():
         "durationMs": s.get("durationMs"),
     })
     return jsonify({"success": True})
+
+
+@app.route("/signal", methods=["POST"])
+def post_signal():
+    """Append one SDP/ICE message to a friend<->host signaling box."""
+    d = request.json or {}
+    room, session, role, msg = d.get("room"), d.get("session"), d.get("role"), d.get("msg")
+    if not (room and session and role) or msg is None:
+        return jsonify({"error": "missing fields"}), 400
+    if role not in ("friend", "host"):
+        return jsonify({"error": "bad role"}), 400
+    store.signal_post(room, session, role, msg)
+    return jsonify({"ok": True})
+
+
+@app.route("/signal", methods=["GET"])
+def get_signal():
+    """Read the OTHER side's messages (caller passes its own role)."""
+    room, session, role = request.args.get("room"), request.args.get("session"), request.args.get("role")
+    if not (room and session and role):
+        return jsonify({"error": "missing fields"}), 400
+    return jsonify({"messages": store.signal_get(room, session, role)})
+
+
+@app.route("/signal/pending", methods=["GET"])
+def get_pending():
+    """Host discovers sessions where a friend is trying to connect."""
+    room = request.args.get("room")
+    if not room:
+        return jsonify({"error": "missing room"}), 400
+    return jsonify({"sessions": store.pending_sessions(room)})
 
 
 @app.route("/health", methods=["GET"])

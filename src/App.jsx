@@ -57,16 +57,13 @@ export default function App() {
             <Globe className="text-emerald-500" />
             <span>mc.zenithurl.com</span>
           </div>
-          <div className="flex gap-4">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest self-center">v1.1.0 PRO</span>
-            <button className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Login</button>
-          </div>
+          <span className="text-xs font-bold text-emerald-500 uppercase tracking-widest self-center">Free • Direct P2P</span>
         </div>
       </nav>
 
       <header className="max-w-6xl mx-auto px-4 py-24 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-8 border border-emerald-500/20">
-          <Zap size={14} /> NEW: One-Click Backups & Whitelist Controls
+          <Zap size={14} /> Free forever • No card • No port forwarding
         </div>
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-linear-to-br from-white to-slate-400 bg-clip-text text-transparent">
           The Ultimate <br />Self-Hosting Engine.

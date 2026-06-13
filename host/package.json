@@ -8,8 +8,9 @@
   },
   "scripts": {
     "start": "node src/index.mjs",
-    "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/registry.mjs && node --check src/proxy.mjs && node --check src/backend.mjs && node --check src/analytics.mjs",
-    "test:p2p": "node test/webrtc-e2e.mjs"
+    "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/backend.mjs && node --check src/analytics.mjs && node --check src/p2p.mjs",
+    "test:p2p": "node test/webrtc-e2e.mjs",
+    "test:signaling": "node test/signaling-e2e.mjs"
   },
   "engines": {
     "node": ">=20"
