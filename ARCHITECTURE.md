@@ -64,9 +64,14 @@ laggy relay).
 
 - **Stage 0 — Scaffold** ✅ host app, connector, website room page, registry interface.
 - **Stage 1 — Local proof** ✅ full chain works across processes via loopback transport.
-- **Stage 2 — Real registry** ⬜ wire Firebase so host writes / website reads live rooms.
-- **Stage 3 — Real P2P** ⬜ replace the seam with WebRTC hole-punching + STUN signaling.
-- **Stage 4 — Two-machine latency test** ⬜ prove <50ms host↔friend in Australia.
+- **Stage 2 — Real registry** 🟡 backend rewritten for Firestore (`from_zenithmc/`);
+  needs the service-account key set on the backend host to persist live.
+- **Stage 3 — Real P2P** 🟡 WebRTC transport built + PROVEN end-to-end
+  (`shared/webrtcBridge.mjs`, `npm run test:p2p`): a Minecraft TCP stream rides a
+  WebRTC DataChannel host↔friend. Remaining: swap the in-process signaling for the
+  backend Firestore mailbox and wire it into the host app + connector.
+- **Stage 4 — Two-machine latency test** ⬜ prove <50ms host↔friend in Australia
+  (the one thing the e2e test can't show on a single machine).
 - **Stage 5 — Packaging** ⬜ bundle host app + connector + JRE into one-click downloads.
 - **Stage 6 — Admin analytics UI** ⬜ dashboard reading the admin path (all servers/players).
 - **Stage 7 — Polish** ⬜ wildcard `*.mc.zenithurl.com` on Vercel, server-status ping, UI.

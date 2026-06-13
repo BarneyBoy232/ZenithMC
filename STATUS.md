@@ -26,6 +26,15 @@ _Quick "you are here" map. Pairs with `ARCHITECTURE.md` (the full design)._
 
 ## 🟡 Current stage: end of Stage 1 (local proof) → start of Stage 2/3
 
+## ✅ Real WebRTC P2P transport — PROVEN
+
+`shared/webrtcBridge.mjs` carries a Minecraft TCP stream over a WebRTC DataChannel
+(host ↔ friend, STUN hole-punching). Verified end-to-end with `npm run test:p2p`
+(from `host/`): client → connector → DataChannel → host → MC server → reply. This
+is the project's biggest risk retired. (Latency proof still needs a 2nd machine.)
+Remaining to make it usable in production: backend signaling mailbox + wiring it
+into the host app/connector (replacing the loopback seam).
+
 ## Decisions locked in
 
 - **Architecture:** P2P + connector is the SOLE primary path (your rules #4/#5 forbid

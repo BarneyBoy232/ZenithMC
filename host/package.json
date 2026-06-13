@@ -8,9 +8,13 @@
   },
   "scripts": {
     "start": "node src/index.mjs",
-    "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/registry.mjs && node --check src/proxy.mjs"
+    "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/registry.mjs && node --check src/proxy.mjs && node --check src/backend.mjs && node --check src/analytics.mjs",
+    "test:p2p": "node test/webrtc-e2e.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "node-datachannel": "^0.32.3"
   }
 }

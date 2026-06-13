@@ -12,5 +12,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "node-datachannel": "^0.32.3"
   }
 }
