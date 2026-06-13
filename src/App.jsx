@@ -71,18 +71,21 @@ export default function App() {
         <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10">
           Turn your PC into a high-performance Minecraft node. Distributed hosting with Pro-level management, instant URLs, and zero port forwarding.
         </p>
-        <button 
-          onClick={handleDownload}
-          className="group inline-flex items-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-lg px-10 py-5 rounded-2xl transition-all hover:scale-105 shadow-[0_0_50px_-10px_#10b981] disabled:opacity-70 disabled:hover:scale-100"
-          disabled={isDownloading}
-        >
-          {isDownloading ? (
-            <div className="h-6 w-6 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Download size={24} />
-          )}
-          {isDownloading ? 'Downloading...' : 'Download ZenithHost Pro'}
-        </button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="/downloads/ZenithMC-Host.exe"
+            className="group inline-flex items-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-lg px-10 py-5 rounded-2xl transition-all hover:scale-105 shadow-[0_0_50px_-10px_#10b981]"
+          >
+            <Download size={24} /> Download for Windows
+          </a>
+          <a
+            href="/downloads/ZenithMC-Host-Console.exe"
+            className="inline-flex items-center gap-2 border border-slate-700 hover:border-emerald-500/50 text-slate-300 hover:text-white font-medium px-6 py-5 rounded-2xl transition-colors"
+          >
+            <Terminal size={20} /> Console version
+          </a>
+        </div>
+        <p className="text-slate-600 text-sm mt-4">Same engine — one has a window, one runs in a terminal.</p>
       </header>
 
       <section className="max-w-6xl mx-auto px-4 grid md:grid-cols-4 gap-6 mb-24">
