@@ -2,17 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Download, Terminal, Shield, Save, ArrowUpCircle, Globe, Server, Lock, Unlock, Copy, CheckCircle, ServerOff, Zap } from 'lucide-react';
 
 export default function App() {
-  const [isDownloading, setIsDownloading] = useState(false);
   const [copied, setCopied] = useState(null);
   const [activeServers, setActiveServers] = useState([]);
   const [isLoadingServers, setIsLoadingServers] = useState(true);
   const [networkError, setNetworkError] = useState(false);
-
-  const handleDownload = () => {
-    setIsDownloading(true);
-    // In a real scenario, this would trigger the actual file download
-    setTimeout(() => setIsDownloading(false), 2000);
-  };
 
   const copyToClipboard = (text) => {
     const textArea = document.createElement("textarea");
