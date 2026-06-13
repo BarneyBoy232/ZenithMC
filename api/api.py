@@ -1,120 +1,166 @@
+"""
+ZenithMC backend — the broker between host PCs and the website.
+
+Design (P2P model):
+  - The host app POSTs its room status here (/sync). We persist it in Firestore
+    under the `from_zenithmc/` sub-project of the ZenithURL project.
+  - The website reads live rooms (/live-servers) and a single room (/room/<name>).
+  - NO game traffic passes through here — only tiny text records. Game packets go
+    directly PC <-> PC over the P2P link.
+
+Credentials: set the env var FIREBASE_SERVICE_ACCOUNT to the JSON of a service
+account key for project `zenithurl-e9909` (generate it FREE in the Firebase
+console -> Project settings -> Service accounts; no billing/card needed). If the
+var is absent we fall back to an in-memory store so local dev still runs.
+
+NOTE: the previous version hard-coded a Cloudflare API token and wrote SRV records
+pointing at bore.pub. That relay path is retired (it breaks the no-cap / <=50ms
+rules) and the secret was removed — rotate that token in Cloudflare regardless,
+since it remains in git history.
+"""
+
+import os
+import json
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests
-import sqlite3
-import os
 
 app = Flask(__name__)
-CORS(app) 
+CORS(app)
 
-active_servers = {}
+SUBPROJECT = "from_zenithmc"  # the Abstrak sub-project (a Firestore collection)
 
-CLOUDFLARE_API_TOKEN = "cfut_bdAgReVi90symRLO7wilSDdq6skSIskCwj78XGQi98a3a73e"
-ZONE_ID = "cb957de4a36dcefa4904df15bb79f410"
 
-# Initialize Database
-def init_db():
-    conn = sqlite3.connect('zenith.db')
-    conn.execute('CREATE TABLE IF NOT EXISTS servers (subdomain TEXT PRIMARY KEY, user_id TEXT)')
-    conn.commit()
-    conn.close()
+# --------------------------------------------------------------------------- #
+# Storage: Firestore when credentials are present, else in-memory for dev.
+# --------------------------------------------------------------------------- #
+class MemoryStore:
+    def __init__(self):
+        self.rooms = {}
+        self.sessions = []
 
-init_db()
+    def upsert_room(self, name, data):
+        self.rooms[name] = {**self.rooms.get(name, {}), **data, "room": name}
 
-def clean_old_dns(subdomain):
-    """Finds and deletes ALL existing SRV records to prevent stacking."""
-    base_url = f"https://api.cloudflare.com/client/v4/zones/{ZONE_ID}/dns_records"
-    headers = {"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": "application/json"}
-    
-    # Check for BOTH the correct prefixed name and the old broken name formats
-    names_to_check = [
-        f"_minecraft._tcp.{subdomain}.mc.zenithurl.com",
-        f"{subdomain}.mc.zenithurl.com" 
-    ]
-    
-    for srv_name in names_to_check:
-        try:
-            res = requests.get(f"{base_url}?type=SRV&name={srv_name}", headers=headers).json()
-            for record in res.get('result', []):
-                requests.delete(f"{base_url}/{record['id']}", headers=headers)
-        except Exception as e:
-            print(f"[CLEANUP ERROR] {e}")
+    def delete_room(self, name):
+        self.rooms.pop(name, None)
 
-def update_dns_records(subdomain, port):
-    clean_old_dns(subdomain) # Automatically wipe old records first!
-    
-    base_url = f"https://api.cloudflare.com/client/v4/zones/{ZONE_ID}/dns_records"
-    headers = {"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": "application/json"}
-    
-    cname_data = {
-        "type": "CNAME",
-        "name": f"{subdomain}.mc.zenithurl.com",
-        "content": "bore.pub",
-        "proxied": False
-    }
-    
+    def get_room(self, name):
+        return self.rooms.get(name)
+
+    def public_rooms(self):
+        return [r for r in self.rooms.values() if r.get("online") and not r.get("private")]
+
+    def add_session(self, session):
+        self.sessions.append(session)
+
+
+class FirestoreStore:
+    def __init__(self, db):
+        self.db = db
+        self.col = db.collection(SUBPROJECT)
+
+    def upsert_room(self, name, data):
+        self.col.document(f"room_{name}").set({**data, "room": name, "kind": "room"}, merge=True)
+
+    def delete_room(self, name):
+        self.col.document(f"room_{name}").set({"online": False}, merge=True)
+
+    def get_room(self, name):
+        doc = self.col.document(f"room_{name}").get()
+        return doc.to_dict() if doc.exists else None
+
+    def public_rooms(self):
+        q = self.col.where("kind", "==", "room").where("online", "==", True)
+        return [d.to_dict() for d in q.stream() if not d.to_dict().get("private")]
+
+    def add_session(self, session):
+        self.col.add({**session, "kind": "session"})
+
+
+def make_store():
+    raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+    if not raw:
+        print("[store] FIREBASE_SERVICE_ACCOUNT not set — using in-memory store (dev).")
+        return MemoryStore()
     try:
-        requests.post(base_url, headers=headers, json=cname_data)
-    except: pass
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+        cred = credentials.Certificate(json.loads(raw))
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+        print("[store] Firestore connected (project from service account).")
+        return FirestoreStore(firestore.client())
+    except Exception as e:  # never crash the API over storage init
+        print(f"[store] Firestore init failed ({e}); falling back to memory.")
+        return MemoryStore()
 
-    srv_data = {
-        "type": "SRV",
-        "name": f"_minecraft._tcp.{subdomain}.mc.zenithurl.com",
-        "data": {
-            "service": "_minecraft",
-            "proto": "_tcp",
-            "name": f"{subdomain}.mc.zenithurl.com",
-            "priority": 0,
-            "weight": 5,
-            "port": int(port),
-            "target": "bore.pub"
-        }
-    }
-    
-    try:
-        response = requests.post(base_url, headers=headers, json=srv_data)
-        if response.status_code == 200:
-            print(f"[DNS ROUTED] {subdomain}.mc.zenithurl.com -> bore.pub:{port}")
-    except Exception as e:
-        print(f"[DNS ERROR] {e}")
 
-@app.route('/sync', methods=['POST'])
+store = make_store()
+
+
+# --------------------------------------------------------------------------- #
+# Routes
+# --------------------------------------------------------------------------- #
+@app.route("/sync", methods=["POST"])
 def sync_server():
-    data = request.json
-    subdomain = data.get('subdomain')
-    status = data.get('status')
-    user_id = data.get('user_id', 'anonymous') # We'll add this to the desktop app next
-    
-    # Check Database Lock
-    conn = sqlite3.connect('zenith.db')
-    c = conn.cursor()
-    c.execute('SELECT user_id FROM servers WHERE subdomain = ?', (subdomain,))
-    row = c.fetchone()
-    
-    if row and row[0] != user_id:
-        conn.close()
-        return jsonify({"success": False, "error": "Subdomain is already taken by another user."}), 403
-    elif not row:
-        c.execute('INSERT INTO servers (subdomain, user_id) VALUES (?, ?)', (subdomain, user_id))
-        conn.commit()
-    conn.close()
+    """Host app publishes / refreshes / takes down a room."""
+    data = request.json or {}
+    name = data.get("subdomain") or data.get("room")
+    if not name:
+        return jsonify({"success": False, "error": "missing room name"}), 400
 
-    if status == "online":
-        port = data.get('port')
-        is_private = data.get('is_private', False)
-        
-        active_servers[subdomain] = {"name": subdomain, "is_private": is_private, "port": port, "players": 0}
-        update_dns_records(subdomain, port)
-        
-    elif status == "offline" and subdomain in active_servers:
-        del active_servers[subdomain]
-        
+    if data.get("status") == "online":
+        store.upsert_room(name, {
+            "online": True,
+            "private": bool(data.get("is_private", False)),
+            # The P2P endpoint id the connector dials (not a relay address).
+            "endpoint": data.get("endpoint"),
+            "motd": data.get("motd"),
+            "version": data.get("version"),
+            "playerCount": int(data.get("players", 0) or 0),
+            "owner": data.get("user_id", "anonymous"),
+            "updatedAt": int(time.time()),
+        })
+    else:
+        store.delete_room(name)
+
     return jsonify({"success": True})
 
-@app.route('/live-servers', methods=['GET'])
-def get_live_servers():
-    public_servers = [s for s in active_servers.values() if not s['is_private']]
-    return jsonify(public_servers)
 
-if __name__ == '__main__':
+@app.route("/live-servers", methods=["GET"])
+def live_servers():
+    """Public list for the landing-page network panel."""
+    return jsonify(store.public_rooms())
+
+
+@app.route("/room/<name>", methods=["GET"])
+def room(name):
+    """Single room lookup for the per-subdomain page."""
+    r = store.get_room(name)
+    if not r or not r.get("online"):
+        return jsonify({"room": name, "online": False})
+    return jsonify(r)
+
+
+@app.route("/session", methods=["POST"])
+def session():
+    """Host app streams completed player sessions for admin analytics."""
+    s = request.json or {}
+    store.add_session({
+        "room": s.get("room"),
+        "name": s.get("name"),
+        "joinedAt": s.get("joinedAt"),
+        "leftAt": s.get("leftAt"),
+        "durationMs": s.get("durationMs"),
+    })
+    return jsonify({"success": True})
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"ok": True, "store": type(store).__name__})
+
+
+if __name__ == "__main__":
     app.run(port=5000)

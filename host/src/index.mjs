@@ -15,6 +15,7 @@ import { MinecraftServer } from './mcServer.mjs';
 import { LocalRegistry } from './registry.mjs';
 import { startProxy } from './proxy.mjs';
 import { SessionTracker } from './analytics.mjs';
+import { backend } from './backend.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -47,13 +48,15 @@ async function main() {
 
   mc.on('ready', async () => {
     startProxy({ listenPort: edgePort, targetPort: port });
+    const endpoint = `edge:${edgePort}`; // P2P endpoint id the connector dials
     await registry.publish(room, {
-      address: `edge:${edgePort}`, // P2P endpoint id; becomes the friend's paste string
+      address: endpoint,
       motd: mc.motd,
       version: mc.version,
       playerCount: 0,
       players: [],
     });
+    await backend.publish(room, { endpoint, motd: mc.motd, version: mc.version });
     console.log(`\n✅ Room "${room}" is live.`);
     console.log(`   MC server : 127.0.0.1:${port}`);
     console.log(`   Proxy edge: 127.0.0.1:${edgePort}  (P2P attaches here)`);
@@ -64,6 +67,7 @@ async function main() {
     sessions.join(name, Date.now());
     console.log(`👤 ${name} joined  (${count} online)`);
     await registry.updatePlayers(room, { count, players: [...mc.players] });
+    await backend.players(room, count);
   });
 
   mc.on('player-leave', async ({ name, count }) => {
@@ -71,14 +75,16 @@ async function main() {
     if (session) {
       const mins = (session.durationMs / 60000).toFixed(1);
       console.log(`👋 ${name} left  (${count} online, played ${mins} min)`);
+      await backend.session({ room, ...session }); // admin analytics feed
     }
     await registry.updatePlayers(room, { count, players: [...mc.players] });
-    // (admin feed) overall rollups — streamed to the admin path in the Firebase build
+    await backend.players(room, count);
     console.log('   ↳ analytics:', JSON.stringify(sessions.summary()));
   });
 
   mc.on('stopped', async () => {
     await registry.takedown(room);
+    await backend.takedown(room);
     console.log('Server stopped, room taken offline.');
     process.exit(0);
   });

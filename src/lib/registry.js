@@ -43,11 +43,10 @@ function normalize(s) {
 /** Look up a single room. Returns `{ online:false }` if not found/unreachable. */
 export async function fetchRoom(room) {
   try {
-    const res = await fetch(`${API}/live-servers`);
+    const res = await fetch(`${API}/room/${encodeURIComponent(room)}`);
     if (!res.ok) throw new Error(String(res.status));
-    const list = await res.json();
-    const found = (list || []).find((s) => (s.name ?? s.room) === room);
-    return found ? normalize(found) : { room, online: false };
+    const data = await res.json();
+    return data.online ? normalize(data) : { room, online: false };
   } catch {
     return { room, online: false, error: true };
   }

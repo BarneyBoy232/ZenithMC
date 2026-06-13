@@ -26,17 +26,32 @@ _Quick "you are here" map. Pairs with `ARCHITECTURE.md` (the full design)._
 
 ## 🟡 Current stage: end of Stage 1 (local proof) → start of Stage 2/3
 
-The skeleton is real and runs locally. The two things that make it a *product* —
-a real registry (Firebase) and a real P2P link (WebRTC) — are next, and the first of
-those needs input from you.
+## Decisions locked in
+
+- **Architecture:** P2P + connector is the SOLE primary path (your rules #4/#5 forbid
+  a relay). The old Cloudflare-SRV + bore.pub relay path is **retired**. SRV-fallback
+  stays documented as a future add-on *if* a good free AU tunnel ever appears.
+- **Data layer:** Firestore in the **ZenithURL** project (`zenithurl-e9909`), namespaced
+  under the **`from_zenithmc/`** sub-project (created via Abstrak). All Firestore access
+  goes through the backend (`api/api.py`) — the host app ships no credentials.
+
+## Stage 2 wiring done (needs your key to go live)
+
+- `api/api.py` rewritten: Firestore-backed `/sync`, `/live-servers`, `/room/<name>`,
+  `/session`; **leaked Cloudflare token removed**; safe in-memory fallback for dev.
+- Host app POSTs room status + player sessions to the backend (`host/src/backend.mjs`).
+- Website room page reads the live `/room/<name>` endpoint.
 
 ## 🚦 Crossroads (what needs YOU)
 
-1. **Firebase** — reuse the existing `zenithstreaming-f8539` project, or a new one?
-   Either way I need its web config to wire Stage 2.
-2. **A second machine** — to genuinely prove <50ms in Stage 4 (can come later).
-3. **Order** — build the real P2P transport next (Stage 3) or wire Firebase first
-   (Stage 2)? They're independent; I can do whichever you prefer.
+1. **🔴 Rotate the Cloudflare token** — `cfut_…98a3a73e` is still in git history. Rotate
+   it in the Cloudflare dashboard. (We no longer use it, but it's exposed.)
+2. **Firebase service-account key** (FREE, no card): Firebase console → ZenithURL →
+   Project settings → Service accounts → *Generate new private key*. Set the JSON as
+   env var `FIREBASE_SERVICE_ACCOUNT` on the backend host. Until then the API runs on
+   the in-memory fallback.
+3. **`pk_live_` key** for the admin gate (Gates → Accounts) — needed for Stage 6.
+4. **A second machine** — to prove <50ms in Stage 4 (can come later).
 
 ## How to run what exists today
 
