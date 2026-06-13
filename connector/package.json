@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/index.mjs",
-    "check": "node --check src/index.mjs"
+    "serve": "node src/control.mjs",
+    "check": "node --check src/index.mjs && node --check src/control.mjs"
   },
   "engines": {
     "node": ">=20"

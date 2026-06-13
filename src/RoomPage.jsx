@@ -4,14 +4,37 @@ import { fetchRoom } from './lib/registry.js';
 
 // The per-subdomain page: xxx.mc.zenithurl.com
 // This is "Version A" — it never carries game traffic. It confirms the server is
-// online, gives the one-time connector download, and shows exactly what to paste
-// into Minecraft. The connector on the friend's PC does the real P2P connection.
+// online, then drives the local connector (if installed) to open the direct P2P
+// link and tells the friend exactly what to paste into Minecraft.
 
-const PASTE_ADDRESS = 'localhost:25565'; // what the connector exposes locally
+const CONTROL = 'http://127.0.0.1:48911'; // connector's local control API
+
+async function connectorStatus() {
+  try {
+    const res = await fetch(`${CONTROL}/status`, { signal: AbortSignal.timeout(1500) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function connectorConnect(room) {
+  const res = await fetch(`${CONTROL}/connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'connect failed');
+  return res.json(); // { localPort }
+}
 
 export default function RoomPage({ room }) {
   const [state, setState] = useState({ loading: true, data: null });
   const [copied, setCopied] = useState(false);
+  const [hasConnector, setHasConnector] = useState(null); // null = checking
+  const [pasteAddr, setPasteAddr] = useState(null);
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState(null);
 
   const load = useCallback(async () => {
     const data = await fetchRoom(room);
@@ -23,6 +46,23 @@ export default function RoomPage({ room }) {
     const t = setInterval(load, 10000); // live refresh
     return () => clearInterval(t);
   }, [load]);
+
+  useEffect(() => {
+    connectorStatus().then(setHasConnector);
+  }, []);
+
+  const connect = async () => {
+    setConnecting(true);
+    setConnectError(null);
+    try {
+      const { localPort } = await connectorConnect(room);
+      setPasteAddr(`localhost:${localPort}`);
+    } catch (e) {
+      setConnectError(e.message);
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const copy = (text) => {
     navigator.clipboard?.writeText(text).catch(() => {});
@@ -69,38 +109,61 @@ export default function RoomPage({ room }) {
         </div>
 
         {online ? (
-          <>
-            {/* Step 1: connector */}
-            <Step n={1} title="Get the connector (first time only)">
-              <p className="text-slate-400 text-sm mb-4">
-                A tiny helper that creates the direct connection. Download once — after that it
-                runs quietly and you never touch it again.
-              </p>
-              <button className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition-all hover:scale-105">
-                <Download size={20} /> Download Connector
-              </button>
+          !pasteAddr ? (
+            <Step n={1} title="Connect">
+              {hasConnector === null ? (
+                <p className="text-slate-500 text-sm animate-pulse">Checking for your connector…</p>
+              ) : hasConnector === false ? (
+                <>
+                  <p className="text-slate-400 text-sm mb-4">
+                    You'll need the ZenithMC connector — a tiny helper, downloaded once. Run it once
+                    and it stays ready in the background; you'll never touch it again.
+                  </p>
+                  <button className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition-all hover:scale-105">
+                    <Download size={20} /> Download Connector
+                  </button>
+                  <p className="text-slate-600 text-xs mt-3">
+                    Already installed?{' '}
+                    <button onClick={() => connectorStatus().then(setHasConnector)} className="underline hover:text-emerald-400">
+                      Re-check
+                    </button>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-400 text-sm mb-4">
+                    Your connector is ready. Click to open a direct link to this server.
+                  </p>
+                  <button
+                    onClick={connect}
+                    disabled={connecting}
+                    className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition-all hover:scale-105 disabled:opacity-70"
+                  >
+                    {connecting ? <div className="h-5 w-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" /> : <Zap size={20} />}
+                    {connecting ? 'Connecting…' : 'Connect'}
+                  </button>
+                  {connectError && <p className="text-red-400/80 text-sm mt-3">Couldn't connect directly: {connectError}</p>}
+                </>
+              )}
             </Step>
-
-            {/* Step 2: paste */}
+          ) : (
             <Step n={2} title="Paste into Minecraft">
               <p className="text-slate-400 text-sm mb-4">
                 In Minecraft → Multiplayer → Add Server, paste this address:
               </p>
               <div className="flex items-center gap-3 bg-slate-950 border border-slate-700 rounded-xl p-2 pl-5">
-                <code className="flex-1 font-mono text-emerald-400 text-lg">{PASTE_ADDRESS}</code>
+                <code className="flex-1 font-mono text-emerald-400 text-lg">{pasteAddr}</code>
                 <button
-                  onClick={() => copy(PASTE_ADDRESS)}
+                  onClick={() => copy(pasteAddr)}
                   className="flex items-center gap-2 px-5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-bold hover:text-emerald-400 transition-colors"
                 >
                   {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <p className="text-slate-600 text-xs mt-3">
-                The connector confirms the exact port if 25565 is busy on your PC.
-              </p>
+              <p className="text-slate-600 text-xs mt-3">You're connected directly to the host — no relay.</p>
             </Step>
-          </>
+          )
         ) : (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center text-slate-500">
             <ServerOff size={32} className="mx-auto mb-4" />
