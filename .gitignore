@@ -39,3 +39,7 @@ firebase-*.json
 # Python
 __pycache__/
 *.pyc
+
+# Electron packaging (generated)
+connector/build/tray.png
+connector/dist/
