@@ -29,18 +29,29 @@ function sendBinary(channel, buf) {
   else channel.sendMessage(buf);
 }
 
-// Pipe one DataChannel <-> one TCP socket, buffering until the channel is open.
+// Pipe one DataChannel <-> one TCP socket, buffering until the channel is open and
+// applying backpressure so a burst (e.g. chunk loads) can't balloon memory.
+const HIGH_WATER = 1 << 20; // 1 MB buffered on the channel -> pause the socket
+
 function bridge(channel, socket) {
   const pending = [];
   let open = channel.isOpen?.() ?? false;
 
+  try { channel.setBufferedAmountLowThreshold?.(HIGH_WATER >> 1); } catch { /* not supported */ }
+  channel.onBufferedAmountLow?.(() => socket.resume());
+
+  const push = (buf) => {
+    sendBinary(channel, buf);
+    if ((channel.bufferedAmount?.() ?? 0) > HIGH_WATER) socket.pause();
+  };
+
   socket.on('data', (buf) => {
-    if (open) sendBinary(channel, buf);
+    if (open) push(buf);
     else pending.push(buf);
   });
   channel.onOpen?.(() => {
     open = true;
-    for (const buf of pending.splice(0)) sendBinary(channel, buf);
+    for (const buf of pending.splice(0)) push(buf);
   });
   channel.onMessage((msg) => {
     socket.write(typeof msg === 'string' ? Buffer.from(msg) : Buffer.from(msg));

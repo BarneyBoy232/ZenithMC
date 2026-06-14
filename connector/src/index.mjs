@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import dc from 'node-datachannel';
 import { friendSide } from '../../shared/webrtcBridge.mjs';
 import { getDb, friendSignaling } from '../../shared/firestoreSignaling.mjs';
+import { normalizeRoom, isValidRoom } from '../../shared/validate.mjs';
 
 const ROOM = process.env.ZMC_ROOM;
 const PREFERRED_LOCAL = Number(process.env.ZMC_LOCAL_PORT ?? 25565);
@@ -32,7 +33,8 @@ async function findFreePort(preferred) {
 }
 
 export async function startConnector({ room = ROOM, preferredLocal = PREFERRED_LOCAL } = {}) {
-  if (!room) throw new Error('No room specified (set ZMC_ROOM or pass { room }).');
+  room = normalizeRoom(room);
+  if (!isValidRoom(room)) throw new Error('Invalid room name (use letters, numbers, dashes).');
 
   const session = crypto.randomUUID();
   const signaling = friendSignaling(getDb(), room, session);
@@ -41,9 +43,11 @@ export async function startConnector({ room = ROOM, preferredLocal = PREFERRED_L
   await new Promise((resolve, reject) => {
     friend.pc.onStateChange((st) => {
       if (st === 'connected') resolve();
-      if (st === 'failed' || st === 'closed') reject(new Error(`P2P ${st}`));
+      if (st === 'failed' || st === 'closed') {
+        reject(new Error("Couldn't make a direct connection — your network may block peer-to-peer (strict NAT). Try another network."));
+      }
     });
-    setTimeout(() => reject(new Error('P2P connect timeout')), 20000);
+    setTimeout(() => reject(new Error('Connection timed out — the host may be offline, or the network is blocking the direct link.')), 20000);
   });
 
   const localPort = await findFreePort(preferredLocal);

@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node src/index.mjs",
     "serve": "node src/control.mjs",
-    "check": "node --check src/index.mjs && node --check src/control.mjs"
+    "check": "node --check src/index.mjs && node --check src/control.mjs && node --check src/autostart.mjs"
   },
   "engines": {
     "node": ">=20"

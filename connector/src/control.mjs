@@ -9,7 +9,9 @@
 // CORS + Private Network Access headers are set so an https page may call loopback.
 
 import http from 'node:http';
+import { fileURLToPath } from 'node:url';
 import { startConnector } from './index.mjs';
+import { enableAutostart } from './autostart.mjs';
 
 const CONTROL_PORT = Number(process.env.ZMC_CONTROL_PORT ?? 48911);
 const active = new Map(); // room -> { localPort }
@@ -67,5 +69,9 @@ export function startControlServer({ port = CONTROL_PORT } = {}) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   startControlServer();
+  // Self-register to launch at login, so this is the only time the user runs it.
+  enableAutostart(fileURLToPath(import.meta.url)).then((ok) => {
+    if (ok) console.log('Auto-start enabled — this will run in the background from now on.');
+  });
   console.log(`ZenithMC connector control on http://127.0.0.1:${CONTROL_PORT}`);
 }

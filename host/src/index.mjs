@@ -15,6 +15,7 @@ import { MinecraftServer } from './mcServer.mjs';
 import { SessionTracker } from './analytics.mjs';
 import { startHostP2P } from './p2p.mjs';
 import { getDb, publishRoom, takedownRoom, writeSession } from '../../shared/firestoreSignaling.mjs';
+import { normalizeRoom, isValidRoom } from '../../shared/validate.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -30,9 +31,10 @@ function parseArgs(argv) {
 }
 
 async function main() {
-  const { room, port, mem } = parseArgs(process.argv.slice(2));
-  if (!room) {
-    console.error('Usage: node src/index.mjs <room-name> [--port 25565] [--mem 2048]');
+  const { room: rawRoom, port, mem } = parseArgs(process.argv.slice(2));
+  const room = normalizeRoom(rawRoom);
+  if (!isValidRoom(room)) {
+    console.error('Usage: node src/index.mjs <room-name>  (letters, numbers, dashes; max 32) [--port 25565] [--mem 2048]');
     process.exit(1);
   }
 
