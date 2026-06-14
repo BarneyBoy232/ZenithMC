@@ -3,19 +3,21 @@
 
 import { getDb, watchRoom, watchPublicRooms } from '../../shared/firestoreSignaling.mjs';
 
-// Which room is this page for, from the subdomain?
-//   barneysworld.mc.zenithurl.com -> "barneysworld"
-//   mc.zenithurl.com / localhost   -> null (landing). Dev: append ?room=name
+// Which room is this page for?
+//   mc.zenithurl.com/barneysworld        -> "barneysworld"  (path form, what we use)
+//   barneysworld.mc.zenithurl.com        -> "barneysworld"  (subdomain, future)
+//   mc.zenithurl.com / localhost         -> null (landing). Dev: append ?room=name
 export function roomKeyFromHost(loc = window.location) {
   const fromQuery = new URLSearchParams(loc.search).get('room');
   if (fromQuery) return fromQuery;
 
-  const host = loc.hostname;
-  if (host === 'localhost' || host.endsWith('.local') || host === '127.0.0.1') return null;
-
-  const parts = host.split('.');
+  // Subdomain form (only works with a wildcard cert): <room>.mc.zenithurl.com
+  const parts = loc.hostname.split('.');
   if (parts.length >= 4 && parts[1] === 'mc') return parts[0];
-  return null;
+
+  // Path form: mc.zenithurl.com/<room> — free, no wildcard needed.
+  const seg = loc.pathname.split('/').filter(Boolean)[0];
+  return seg || null;
 }
 
 function normalize(s) {

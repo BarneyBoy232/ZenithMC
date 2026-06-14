@@ -106,7 +106,7 @@ export default function App() {
             <div className="p-20 text-center text-slate-500">No active nodes detected. Be the first!</div>
           ) : (
             activeServers.map((server, idx) => {
-              const url = `${server.room}.mc.zenithurl.com`;
+              const url = `mc.zenithurl.com/${server.room}`;
               const isCopied = copied === url;
               return (
                 <div key={server.room} className={`p-6 flex items-center justify-between hover:bg-slate-800/50 transition-colors ${idx !== activeServers.length - 1 ? 'border-b border-slate-800' : ''}`}>

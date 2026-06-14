@@ -48,7 +48,7 @@ async function main() {
     p2p = startHostP2P({ room, targetPort: port });
     await publishRoom(db, room, { motd: mc.motd, version: mc.version, playerCount: 0 });
     console.log(`\n✅ Room "${room}" is live (direct P2P).`);
-    console.log(`   Share: ${room}.mc.zenithurl.com\n`);
+    console.log(`   Share: mc.zenithurl.com/${room}\n`);
   });
 
   mc.on('player-join', async ({ name, count }) => {
