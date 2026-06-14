@@ -8,14 +8,52 @@
 //
 // Those events are what feed both the live registry AND your admin analytics.
 
-import { spawn } from 'node:child_process';
-import { mkdir, writeFile, access } from 'node:fs/promises';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdir, writeFile, access, readdir } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
+const JRE_API = 'https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse';
+
+/**
+ * Return a runnable `java` command. Uses the system Java if present; otherwise
+ * downloads a portable Temurin JRE into `dir/jre` so end users install nothing.
+ * (Windows target; on other platforms it falls back to system `java`.)
+ */
+export async function ensureJava(dir) {
+  if (spawnSync('java', ['-version']).status === 0) return 'java';
+  if (process.platform !== 'win32') return 'java'; // packaged builds are Windows
+
+  const jreDir = join(dir, 'jre');
+  const existing = await findJavaExe(jreDir);
+  if (existing) return existing;
+
+  await mkdir(jreDir, { recursive: true });
+  const zip = join(jreDir, 'jre.zip');
+  const res = await fetch(JRE_API, { redirect: 'follow' });
+  if (!res.ok || !res.body) throw new Error(`JRE download failed (${res.status})`);
+  await new Promise((resolve, reject) => {
+    Readable.fromWeb(res.body).pipe(createWriteStream(zip)).on('finish', resolve).on('error', reject);
+  });
+  // Windows ships tar.exe, which extracts .zip.
+  if (spawnSync('tar', ['-xf', zip, '-C', jreDir]).status !== 0) throw new Error('JRE extract failed');
+  const found = await findJavaExe(jreDir);
+  if (!found) throw new Error('java.exe not found after extract');
+  return found;
+}
+
+async function findJavaExe(jreDir) {
+  try {
+    for (const entry of await readdir(jreDir)) {
+      const candidate = join(jreDir, entry, 'bin', 'java.exe');
+      try { await access(candidate); return candidate; } catch { /* keep looking */ }
+    }
+  } catch { /* dir missing */ }
+  return null;
+}
 
 /** Download the latest Paper build for `version` into `dir` (skips if present). */
 export async function ensurePaper(dir, version = '1.21.4') {
@@ -83,11 +121,12 @@ export class MinecraftServer extends EventEmitter {
   }
 
   async start() {
+    const javaBin = await ensureJava(this.dir);
     await ensurePaper(this.dir, this.version);
     await this.#writeConfig();
 
     this.proc = spawn(
-      'java',
+      javaBin,
       [`-Xms${this.memoryMb}M`, `-Xmx${this.memoryMb}M`, '-jar', 'paper.jar', '--nogui'],
       { cwd: this.dir },
     );
