@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Globe, Server, ServerOff, Copy, CheckCircle, Download, Users, Zap } from 'lucide-react';
-import { fetchRoom } from './lib/registry.js';
+import { subscribeRoom } from './lib/registry.js';
 
 // The per-subdomain page: xxx.mc.zenithurl.com
 // This is "Version A" — it never carries game traffic. It confirms the server is
@@ -36,16 +36,10 @@ export default function RoomPage({ room }) {
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState(null);
 
-  const load = useCallback(async () => {
-    const data = await fetchRoom(room);
-    setState({ loading: false, data });
-  }, [room]);
-
   useEffect(() => {
-    load();
-    const t = setInterval(load, 10000); // live refresh
-    return () => clearInterval(t);
-  }, [load]);
+    const unsub = subscribeRoom(room, (data) => setState({ loading: false, data }));
+    return () => unsub();
+  }, [room]);
 
   useEffect(() => {
     connectorStatus().then(setHasConnector);

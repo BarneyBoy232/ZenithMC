@@ -5,20 +5,19 @@
 //
 // End to end:
 //   1. launches a Paper Minecraft server in host/servers/<room>/
-//   2. publishes the room to the backend phone-book
+//   2. publishes the room to Firestore (the phone book)
 //   3. accepts direct P2P connections from friends -> bridges them to the server
-//   4. streams player join/leave + completed sessions (analytics)
+//   4. streams player counts + completed sessions to Firestore (analytics)
 
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { MinecraftServer } from './mcServer.mjs';
 import { SessionTracker } from './analytics.mjs';
-import { backend } from './backend.mjs';
 import { startHostP2P } from './p2p.mjs';
+import { getDb, publishRoom, takedownRoom, writeSession } from '../../shared/firestoreSignaling.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const API = process.env.ZMC_API ?? 'https://api.zenithurl.com';
 
 function parseArgs(argv) {
   const [room, ...rest] = argv;
@@ -40,13 +39,14 @@ async function main() {
   const dir = join(ROOT, 'servers', room);
   const mc = new MinecraftServer({ name: room, dir, port, memoryMb: mem });
   const sessions = new SessionTracker();
+  const db = getDb();
   let p2p = null;
 
   mc.on('log', (line) => process.stdout.write(`[mc] ${line}\n`));
 
   mc.on('ready', async () => {
-    p2p = startHostP2P({ room, targetPort: port, apiBase: API });
-    await backend.publish(room, { endpoint: `p2p:${room}`, motd: mc.motd, version: mc.version });
+    p2p = startHostP2P({ room, targetPort: port });
+    await publishRoom(db, room, { motd: mc.motd, version: mc.version, playerCount: 0 });
     console.log(`\n✅ Room "${room}" is live (direct P2P).`);
     console.log(`   Share: ${room}.mc.zenithurl.com\n`);
   });
@@ -54,21 +54,21 @@ async function main() {
   mc.on('player-join', async ({ name, count }) => {
     sessions.join(name, Date.now());
     console.log(`👤 ${name} joined  (${count} online)`);
-    await backend.players(room, count);
+    await publishRoom(db, room, { playerCount: count });
   });
 
   mc.on('player-leave', async ({ name, count }) => {
     const s = sessions.leave(name, Date.now());
     if (s) {
       console.log(`👋 ${name} left  (${count} online, played ${(s.durationMs / 60000).toFixed(1)} min)`);
-      await backend.session({ room, ...s });
+      await writeSession(db, { room, ...s });
     }
-    await backend.players(room, count);
+    await publishRoom(db, room, { playerCount: count });
   });
 
   mc.on('stopped', async () => {
     p2p?.stop();
-    await backend.takedown(room);
+    await takedownRoom(db, room);
     console.log('Server stopped, room taken offline.');
     process.exit(0);
   });

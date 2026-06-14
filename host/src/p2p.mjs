@@ -1,24 +1,20 @@
 // p2p.mjs — host side of the direct P2P link.
 //
-// Watches the backend for friends trying to connect to this room, and for each one
-// spins up a WebRTC answerer that bridges the friend's DataChannels straight to the
-// local Minecraft server. No relay — game packets go friend PC <-> host PC.
+// Watches Firestore for friends connecting to this room (push, no polling), and for
+// each one spins up a WebRTC answerer that bridges the friend's DataChannels straight
+// to the local Minecraft server. No relay — game packets go friend PC <-> host PC.
 
 import dc from 'node-datachannel';
 import { hostSide } from '../../shared/webrtcBridge.mjs';
-import { backendSignaling, pollPendingSessions } from '../../shared/signalingClient.mjs';
+import { getDb, hostWatch } from '../../shared/firestoreSignaling.mjs';
 
-export function startHostP2P({ room, targetPort, apiBase }) {
+export function startHostP2P({ room, targetPort }) {
+  const db = getDb();
   const conns = [];
 
-  const watcher = pollPendingSessions({
-    apiBase,
-    room,
-    onSession(session) {
-      const signaling = backendSignaling({ apiBase, room, session, role: 'host' });
-      const pc = hostSide(dc, { targetPort, signaling }); // wires signaling internally
-      conns.push({ session, pc, signaling });
-    },
+  const watcher = hostWatch(db, room, (session, signaling) => {
+    const pc = hostSide(dc, { targetPort, signaling }); // wires signaling internally
+    conns.push({ session, pc, signaling });
   });
 
   return {

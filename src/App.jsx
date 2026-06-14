@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Terminal, Shield, Save, ArrowUpCircle, Globe, Server, Lock, Unlock, Copy, CheckCircle, ServerOff, Zap } from 'lucide-react';
+import { Download, Terminal, Shield, Save, ArrowUpCircle, Globe, Server, Copy, CheckCircle, ServerOff, Zap } from 'lucide-react';
+import { subscribeRooms } from './lib/registry.js';
 
 export default function App() {
   const [copied, setCopied] = useState(null);
@@ -23,23 +24,18 @@ export default function App() {
   };
 
   useEffect(() => {
-    const fetchServers = async () => {
-      try {
-        const response = await fetch('https://api.zenithurl.com/live-servers');
-        if (!response.ok) throw new Error();
-        const data = await response.json();
-        setActiveServers(data || []);
+    let unsub;
+    try {
+      unsub = subscribeRooms((rooms) => {
+        setActiveServers(rooms);
         setNetworkError(false);
-      } catch {
-        setActiveServers([]);
-        setNetworkError(true);
-      } finally {
         setIsLoadingServers(false);
-      }
-    };
-    fetchServers();
-    const interval = setInterval(fetchServers, 15000);
-    return () => clearInterval(interval);
+      });
+    } catch {
+      setNetworkError(true);
+      setIsLoadingServers(false);
+    }
+    return () => unsub && unsub();
   }, []);
 
   return (
@@ -110,10 +106,10 @@ export default function App() {
             <div className="p-20 text-center text-slate-500">No active nodes detected. Be the first!</div>
           ) : (
             activeServers.map((server, idx) => {
-              const url = `${server.name}.mc.zenithurl.com`;
+              const url = `${server.room}.mc.zenithurl.com`;
               const isCopied = copied === url;
               return (
-                <div key={server.name} className={`p-6 flex items-center justify-between hover:bg-slate-800/50 transition-colors ${idx !== activeServers.length - 1 ? 'border-b border-slate-800' : ''}`}>
+                <div key={server.room} className={`p-6 flex items-center justify-between hover:bg-slate-800/50 transition-colors ${idx !== activeServers.length - 1 ? 'border-b border-slate-800' : ''}`}>
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-500">
                       <Server size={24} />

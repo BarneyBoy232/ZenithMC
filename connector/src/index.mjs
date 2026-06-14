@@ -10,9 +10,8 @@ import net from 'node:net';
 import crypto from 'node:crypto';
 import dc from 'node-datachannel';
 import { friendSide } from '../../shared/webrtcBridge.mjs';
-import { backendSignaling } from '../../shared/signalingClient.mjs';
+import { getDb, friendSignaling } from '../../shared/firestoreSignaling.mjs';
 
-const API = process.env.ZMC_API ?? 'https://api.zenithurl.com';
 const ROOM = process.env.ZMC_ROOM;
 const PREFERRED_LOCAL = Number(process.env.ZMC_LOCAL_PORT ?? 25565);
 
@@ -32,11 +31,11 @@ async function findFreePort(preferred) {
   throw new Error('No free local port found');
 }
 
-export async function startConnector({ api = API, room = ROOM, preferredLocal = PREFERRED_LOCAL } = {}) {
+export async function startConnector({ room = ROOM, preferredLocal = PREFERRED_LOCAL } = {}) {
   if (!room) throw new Error('No room specified (set ZMC_ROOM or pass { room }).');
 
   const session = crypto.randomUUID();
-  const signaling = backendSignaling({ apiBase: api, room, session, role: 'friend' });
+  const signaling = friendSignaling(getDb(), room, session);
   const friend = friendSide(dc, { signaling }); // creates the offer + wires signaling
 
   await new Promise((resolve, reject) => {
