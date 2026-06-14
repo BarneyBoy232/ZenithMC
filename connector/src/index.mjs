@@ -57,14 +57,17 @@ export async function startConnector({ room = ROOM, preferredLocal = PREFERRED_L
   return { localPort, session, server, signaling, friend };
 }
 
-// Run directly (not when imported by a test)
+// Run directly (not when imported or bundled). Wrapped so there's no top-level
+// await, which lets esbuild bundle this file for the Electron build.
 if (import.meta.url === `file://${process.argv[1]}`) {
-  try {
-    const { localPort } = await startConnector();
-    console.log('ZenithMC connector connected (direct P2P).');
-    console.log(`👉 Paste this into Minecraft:  localhost:${localPort}`);
-  } catch (e) {
-    console.error('Could not establish a direct connection:', e.message);
-    process.exit(1);
-  }
+  (async () => {
+    try {
+      const { localPort } = await startConnector();
+      console.log('ZenithMC connector connected (direct P2P).');
+      console.log(`👉 Paste this into Minecraft:  localhost:${localPort}`);
+    } catch (e) {
+      console.error('Could not establish a direct connection:', e.message);
+      process.exit(1);
+    }
+  })();
 }

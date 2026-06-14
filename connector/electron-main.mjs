@@ -1,19 +1,21 @@
-// electron-main.mjs — the packaged connector. Runs as a tray app: no window, just
-// a system-tray icon, with the control server running in the background so the
-// website can drive connections. This is the friend's one download.
+// electron-main.mjs — the packaged connector. Runs as a tray app: no window, just a
+// system-tray icon, with the control server running in the background so the website
+// can drive connections. This is the friend's one download.
+//
+// This file is bundled by build/bundle.mjs (esbuild) into a single dist-bundle file
+// so the shared/ imports are inlined and there are no external relative paths.
 
 import { app, Tray, Menu, nativeImage } from 'electron';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { startControlServer } from './src/control.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 let tray;
 
 app.whenReady().then(() => {
   startControlServer();
 
-  tray = new Tray(nativeImage.createFromPath(join(__dirname, 'build', 'tray.png')));
+  const iconPath = join(app.getAppPath(), 'build', 'tray.png');
+  tray = new Tray(nativeImage.createFromPath(iconPath));
   tray.setToolTip('ZenithMC connector — running');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'ZenithMC connector', enabled: false },

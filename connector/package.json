@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "ZenithMC friend-side connector — exposes localhost to Minecraft and carries it over the direct P2P link to the host.",
   "type": "module",
-  "main": "electron-main.mjs",
+  "main": "dist-bundle/connector.cjs",
   "bin": {
     "zenithmc-connector": "src/index.mjs"
   },
@@ -11,7 +11,8 @@
     "start": "node src/index.mjs",
     "serve": "node src/control.mjs",
     "icon": "node build/gen-icon.mjs",
-    "dist": "node build/gen-icon.mjs && electron-builder",
+    "bundle": "node build/bundle.mjs",
+    "dist": "node build/gen-icon.mjs && node build/bundle.mjs && electron-builder",
     "check": "node --check src/index.mjs && node --check src/control.mjs && node --check src/autostart.mjs && node --check electron-main.mjs"
   },
   "engines": {
@@ -23,12 +24,13 @@
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "esbuild": "^0.28.1"
   },
   "build": {
     "appId": "com.zenithurl.zenithmc.connector",
     "productName": "ZenithMC Connector",
-    "files": ["electron-main.mjs", "src/**/*", "build/tray.png", "../shared/**/*"],
+    "files": ["dist-bundle/**", "build/tray.png", "node_modules/node-datachannel/**"],
     "asarUnpack": ["**/node_modules/node-datachannel/**"],
     "win": { "target": "nsis" },
     "nsis": { "oneClick": true, "perMachine": false, "runAfterFinish": true }
