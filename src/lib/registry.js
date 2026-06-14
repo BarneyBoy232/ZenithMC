@@ -1,7 +1,7 @@
 // registry.js — the website's live view of the phone book, read straight from
 // Firestore (push, no backend). Game traffic never touches any of this.
 
-import { getDb, watchRoom, watchPublicRooms } from '../../shared/firestoreSignaling.mjs';
+import { getDb, watchRoom, watchPublicRooms, watchAllRooms, watchSessions } from '../../shared/firestoreSignaling.mjs';
 import { normalizeRoom, isValidRoom } from '../../shared/validate.mjs';
 
 // Which room is this page for?
@@ -41,4 +41,12 @@ export function subscribeRoom(room, cb) {
 // Live subscription to all online rooms (landing-page network panel).
 export function subscribeRooms(cb) {
   return watchPublicRooms(getDb(), (list) => cb(list.map(normalize)));
+}
+
+// Admin-only live subscriptions.
+export function subscribeAllRooms(cb) {
+  return watchAllRooms(getDb(), (list) => cb(list.map(normalize)));
+}
+export function subscribeSessions(cb) {
+  return watchSessions(getDb(), (list) => cb(list));
 }
