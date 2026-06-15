@@ -23,24 +23,25 @@ const ROOT = join(__dirname, '..');
 function parseArgs(argv) {
   const room = argv[0];
   const rest = argv.slice(1);
-  const opts = { room, port: 25565, mem: 2048, private: rest.includes('--private') };
+  const opts = { room, port: 25565, mem: 2048, version: '1.21.4', private: rest.includes('--private') };
   for (let i = 0; i < rest.length; i += 1) {
     if (rest[i] === '--port') opts.port = Number(rest[i + 1]);
     if (rest[i] === '--mem') opts.mem = Number(rest[i + 1]);
+    if (rest[i] === '--version') opts.version = rest[i + 1];
   }
   return opts;
 }
 
 async function main() {
-  const { room: rawRoom, port, mem, private: isPrivate } = parseArgs(process.argv.slice(2));
+  const { room: rawRoom, port, mem, version, private: isPrivate } = parseArgs(process.argv.slice(2));
   const room = normalizeRoom(rawRoom);
   if (!isValidRoom(room)) {
-    console.error('Usage: node src/index.mjs <room-name>  (letters, numbers, dashes; max 32) [--port 25565] [--mem 2048]');
+    console.error('Usage: node src/index.mjs <room-name>  (letters, numbers, dashes; max 32) [--version 1.21.4] [--port 25565] [--mem 2048] [--private]');
     process.exit(1);
   }
 
   const dir = join(ROOT, 'servers', room);
-  const mc = new MinecraftServer({ name: room, dir, port, memoryMb: mem });
+  const mc = new MinecraftServer({ name: room, dir, port, memoryMb: mem, version });
   const sessions = new SessionTracker();
   const db = getDb();
   let p2p = null;
