@@ -63,6 +63,11 @@ export function startControlServer({ port = CONTROL_PORT } = {}) {
     res.writeHead(404);
     res.end();
   });
+  // Don't crash if the port is taken (another connector already running).
+  server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') console.error('Control port in use — another connector is already running.');
+    else console.error('Control server error:', e.message);
+  });
   server.listen(port, '127.0.0.1');
   return server;
 }
