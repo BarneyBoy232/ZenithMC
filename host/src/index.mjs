@@ -23,7 +23,7 @@ const ROOT = join(__dirname, '..');
 function parseArgs(argv) {
   const room = argv[0];
   const rest = argv.slice(1);
-  const opts = { room, port: 25565, mem: 2048, version: '1.21.4', private: rest.includes('--private') };
+  const opts = { room, port: 25565, mem: 2048, version: '1.21.11', private: rest.includes('--private') };
   for (let i = 0; i < rest.length; i += 1) {
     if (rest[i] === '--port') opts.port = Number(rest[i + 1]);
     if (rest[i] === '--mem') opts.mem = Number(rest[i + 1]);

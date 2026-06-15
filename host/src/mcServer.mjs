@@ -9,7 +9,7 @@
 // Those events are what feed both the live registry AND your admin analytics.
 
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdir, writeFile, access, readdir } from 'node:fs/promises';
+import { mkdir, writeFile, access, readdir, readFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { join } from 'node:path';
@@ -55,12 +55,15 @@ async function findJavaExe(jreDir) {
   return null;
 }
 
-/** Download the latest Paper build for `version` into `dir` (skips if present). */
-export async function ensurePaper(dir, version = '1.21.4') {
+/** Download the latest Paper build for `version` into `dir` (re-downloads if the
+ * existing jar is a different version). */
+export async function ensurePaper(dir, version = '1.21.11') {
   const jarPath = join(dir, 'paper.jar');
+  const verPath = join(dir, 'paper.version');
   try {
     await access(jarPath);
-    return jarPath; // already downloaded
+    const have = (await readFile(verPath, 'utf8').catch(() => '')).trim();
+    if (have === version) return jarPath; // correct version already present
   } catch {
     /* needs download */
   }
@@ -81,6 +84,7 @@ export async function ensurePaper(dir, version = '1.21.4') {
     const ws = createWriteStream(jarPath);
     Readable.fromWeb(dl.body).pipe(ws).on('finish', resolve).on('error', reject);
   });
+  await writeFile(verPath, version);
 
   return jarPath;
 }
@@ -95,7 +99,7 @@ export class MinecraftServer extends EventEmitter {
    * @param {string} [opts.version] Minecraft version
    * @param {string} [opts.motd]
    */
-  constructor({ name, dir, port = 25565, memoryMb = 2048, version = '1.21.4', motd }) {
+  constructor({ name, dir, port = 25565, memoryMb = 2048, version = '1.21.11', motd }) {
     super();
     this.name = name;
     this.dir = dir;
