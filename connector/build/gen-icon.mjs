@@ -9,11 +9,18 @@ import { dirname, join } from 'node:path';
 const W = 32, H = 32;
 const [R, G, B] = [16, 185, 129]; // emerald
 
-const raw = Buffer.alloc((W * 3 + 1) * H);
+// A filled circle on a transparent background (RGBA) — reads as a clean dot in the
+// tray rather than a big square. Soft 1px edge for light anti-aliasing.
+const raw = Buffer.alloc((W * 4 + 1) * H);
 let o = 0;
+const cx = (W - 1) / 2, cy = (H - 1) / 2, rad = W / 2 - 1;
 for (let y = 0; y < H; y++) {
   raw[o++] = 0; // filter: none
-  for (let x = 0; x < W; x++) { raw[o++] = R; raw[o++] = G; raw[o++] = B; }
+  for (let x = 0; x < W; x++) {
+    const d = Math.hypot(x - cx, y - cy);
+    const alpha = d <= rad - 1 ? 255 : d <= rad ? Math.round(255 * (rad - d)) : 0;
+    raw[o++] = R; raw[o++] = G; raw[o++] = B; raw[o++] = alpha;
+  }
 }
 
 function crc32(buf) {
@@ -34,7 +41,7 @@ function chunk(type, data) {
 
 const ihdr = Buffer.alloc(13);
 ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4);
-ihdr[8] = 8; ihdr[9] = 2; // 8-bit, color type 2 (RGB)
+ihdr[8] = 8; ihdr[9] = 6; // 8-bit, color type 6 (RGBA)
 
 const png = Buffer.concat([
   Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
