@@ -44,3 +44,6 @@ __pycache__/
 connector/build/tray.png
 connector/dist/
 connector/dist-bundle/
+host/build/icon.png
+host/dist/
+host/dist-bundle/

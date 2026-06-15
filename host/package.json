@@ -2,14 +2,19 @@
   "name": "zenithmc-host",
   "version": "0.1.0",
   "description": "ZenithMC host app — launches Minecraft servers and bridges them to friends over a direct P2P link.",
+  "author": "ZenithURL",
   "type": "module",
+  "main": "dist-bundle/host.cjs",
   "bin": {
     "zenithmc-host": "src/index.mjs"
   },
   "scripts": {
     "start": "node src/index.mjs",
     "gui": "node src/gui.mjs",
-    "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/analytics.mjs && node --check src/p2p.mjs && node --check src/gui.mjs",
+    "icon": "node build/gen-icon.mjs",
+    "bundle": "node build/bundle.mjs",
+    "dist": "node build/gen-icon.mjs && node build/bundle.mjs && electron-builder",
+    "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/analytics.mjs && node --check src/p2p.mjs && node --check src/gui.mjs && node --check src/controller.mjs && node --check electron-main.mjs",
     "test:p2p": "node test/webrtc-e2e.mjs",
     "test:firestore": "node test/firestore-e2e.mjs"
   },
@@ -19,5 +24,32 @@
   "dependencies": {
     "firebase": "^12.14.0",
     "node-datachannel": "^0.32.3"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "esbuild": "^0.28.1"
+  },
+  "build": {
+    "appId": "com.zenithurl.zenithmc.host",
+    "productName": "ZenithMC Host",
+    "artifactName": "ZenithMC-Host-Setup.${ext}",
+    "files": [
+      "dist-bundle/**",
+      "build/icon.png",
+      "node_modules/node-datachannel/**"
+    ],
+    "asarUnpack": [
+      "**/node_modules/node-datachannel/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true
+    }
   }
 }
