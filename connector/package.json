@@ -2,6 +2,7 @@
   "name": "zenithmc-connector",
   "version": "0.1.0",
   "description": "ZenithMC friend-side connector — exposes localhost to Minecraft and carries it over the direct P2P link to the host.",
+  "author": "ZenithURL",
   "type": "module",
   "main": "dist-bundle/connector.cjs",
   "bin": {
