@@ -19,11 +19,13 @@ let room = null;
 const log = [];
 const pushLog = (line) => { log.push(line); if (log.length > 500) log.shift(); };
 
-function start(name) {
+function start(name, isPrivate) {
   if (child || !name) return;
   room = name;
   log.length = 0;
-  child = spawn('node', [join(__dirname, 'index.mjs'), name], { cwd: join(__dirname, '..') });
+  const args = [join(__dirname, 'index.mjs'), name];
+  if (isPrivate) args.push('--private');
+  child = spawn('node', args, { cwd: join(__dirname, '..') });
   child.stdout.on('data', (d) => d.toString().split('\n').forEach((l) => l.trim() && pushLog(l)));
   child.stderr.on('data', (d) => pushLog('[err] ' + d.toString().trim()));
   child.on('exit', () => { child = null; pushLog('— server stopped —'); });
@@ -46,9 +48,10 @@ const page = (theme) => `<!doctype html><html><head><meta charset="utf-8"><title
   <button onclick="stop()">Stop</button>
   <span id="status"></span>
 </div>
+<label style="display:inline-block;margin-top:10px"><input type="checkbox" id="public" checked> List publicly on mc.zenithurl.com</label>
 <pre id="log"></pre>
 <script>
-async function start(){ await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:document.getElementById('room').value})}); }
+async function start(){ await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:document.getElementById('room').value, public:document.getElementById('public').checked})}); }
 async function stop(){ await fetch('/api/stop',{method:'POST'}); }
 async function tick(){ try{ const s=await (await fetch('/api/status')).json(); document.getElementById('status').textContent=s.running?(' live: '+s.room):' stopped'; document.getElementById('log').textContent=s.log.join('\\n'); }catch(e){} }
 setInterval(tick,1000); tick();
@@ -66,7 +69,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'POST' && url.pathname === '/api/start') {
     let body = ''; for await (const c of req) body += c;
-    try { start(JSON.parse(body || '{}').room); } catch { /* ignore */ }
+    try { const b = JSON.parse(body || '{}'); start(b.room, b.public === false); } catch { /* ignore */ }
     res.writeHead(200); return res.end('{}');
   }
   if (req.method === 'POST' && url.pathname === '/api/stop') {

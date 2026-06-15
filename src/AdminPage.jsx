@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { abstrak } from 'abstrak';
 import { Globe, Server, ServerOff, Users, Lock, RefreshCw } from 'lucide-react';
 import { subscribeAllRooms, subscribeSessions } from './lib/registry.js';
-
-const ADMIN_PK = 'pk_live_1df6d7f6ba3b4fc8';
-const ADMIN_EMAIL = 'ethan.barnacoat@gmail.com';
-const gate = abstrak(ADMIN_PK);
+import { gate, ADMIN_EMAIL } from './lib/auth.js';
 
 function fmtMins(ms) {
   return ms ? `${(ms / 60000).toFixed(1)} min` : '—';

@@ -21,9 +21,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
 function parseArgs(argv) {
-  const [room, ...rest] = argv;
-  const opts = { room, port: 25565, mem: 2048 };
-  for (let i = 0; i < rest.length; i += 2) {
+  const room = argv[0];
+  const rest = argv.slice(1);
+  const opts = { room, port: 25565, mem: 2048, private: rest.includes('--private') };
+  for (let i = 0; i < rest.length; i += 1) {
     if (rest[i] === '--port') opts.port = Number(rest[i + 1]);
     if (rest[i] === '--mem') opts.mem = Number(rest[i + 1]);
   }
@@ -31,7 +32,7 @@ function parseArgs(argv) {
 }
 
 async function main() {
-  const { room: rawRoom, port, mem } = parseArgs(process.argv.slice(2));
+  const { room: rawRoom, port, mem, private: isPrivate } = parseArgs(process.argv.slice(2));
   const room = normalizeRoom(rawRoom);
   if (!isValidRoom(room)) {
     console.error('Usage: node src/index.mjs <room-name>  (letters, numbers, dashes; max 32) [--port 25565] [--mem 2048]');
@@ -48,8 +49,8 @@ async function main() {
 
   mc.on('ready', async () => {
     p2p = startHostP2P({ room, targetPort: port });
-    await publishRoom(db, room, { motd: mc.motd, version: mc.version, playerCount: 0 });
-    console.log(`\n✅ Room "${room}" is live (direct P2P).`);
+    await publishRoom(db, room, { motd: mc.motd, version: mc.version, playerCount: 0, private: !!isPrivate });
+    console.log(`\n✅ Room "${room}" is live (direct P2P, ${isPrivate ? 'private' : 'public'}).`);
     console.log(`   Share: mc.zenithurl.com/${room}\n`);
   });
 

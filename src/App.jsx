@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Terminal, Globe, Server, ServerOff, Copy, CheckCircle, Zap, Gauge, Infinity as InfinityIcon, Wifi, ArrowRight, Users } from 'lucide-react';
+import { Download, Terminal, Globe, Server, ServerOff, Copy, CheckCircle, Zap, Gauge, Infinity as InfinityIcon, Wifi, ArrowRight, Users, LogIn } from 'lucide-react';
 import { subscribeRooms } from './lib/registry.js';
+import { gate } from './lib/auth.js';
 
 export default function App() {
   const [copied, setCopied] = useState(null);
   const [servers, setServers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [netError, setNetError] = useState(false);
+  const [user, setUser] = useState(null);
+
+  const signIn = async () => {
+    try { setUser(await gate.signIn()); } catch { /* cancelled */ }
+  };
+  const signOut = async () => {
+    try { await gate.signOut?.(); } catch { /* no-op */ }
+    setUser(null);
+  };
 
   useEffect(() => {
     let unsub;
@@ -33,9 +43,15 @@ export default function App() {
             </span>
             <span>mc.zenithurl.com</span>
           </div>
-          <span className="hidden sm:flex items-center gap-2 text-xs font-medium text-emerald-400/90 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-            <Zap size={13} /> Free · Direct P2P
-          </span>
+          {user ? (
+            <button onClick={signOut} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white px-3 py-1.5 rounded-full border border-white/10 hover:border-white/20 transition-colors">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {user.email}
+            </button>
+          ) : (
+            <button onClick={signIn} className="flex items-center gap-2 text-sm font-medium text-slate-200 hover:text-white px-4 py-1.5 rounded-full border border-white/10 hover:border-emerald-500/40 hover:bg-white/5 transition-colors">
+              <LogIn size={15} /> Sign in
+            </button>
+          )}
         </div>
       </nav>
 

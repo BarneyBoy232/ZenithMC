@@ -43,6 +43,8 @@ export default function RoomPage({ room }) {
 
   useEffect(() => {
     connectorStatus().then(setHasConnector);
+    const t = setInterval(() => connectorStatus().then(setHasConnector), 4000);
+    return () => clearInterval(t);
   }, []);
 
   const connect = async () => {
@@ -69,9 +71,15 @@ export default function RoomPage({ room }) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-emerald-500/30">
       <nav className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center gap-2 font-bold text-xl tracking-tight">
-          <Globe className="text-emerald-500" />
-          <span><span className="text-slate-500">mc.zenithurl.com/</span>{room}</span>
+        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
+            <Globe className="text-emerald-500" />
+            <span><span className="text-slate-500">mc.zenithurl.com/</span>{room}</span>
+          </div>
+          <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${hasConnector ? 'text-emerald-400 border-emerald-500/25 bg-emerald-500/10' : 'text-slate-500 border-white/10 bg-white/5'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${hasConnector ? 'bg-emerald-400' : hasConnector === null ? 'bg-slate-500 animate-pulse' : 'bg-slate-600'}`} />
+            {hasConnector === null ? 'checking' : hasConnector ? 'connector on' : 'connector off'}
+          </span>
         </div>
       </nav>
 

@@ -47,7 +47,7 @@ export function watchRoom(db, room, cb) {
 }
 export function watchPublicRooms(db, cb) {
   const q = query(collection(db, SUBPROJECT), where('kind', '==', 'room'), where('online', '==', true));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data())));
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data()).filter((r) => !r.private)));
 }
 // Admin views: every room (online or not) and every recorded session.
 export function watchAllRooms(db, cb) {
