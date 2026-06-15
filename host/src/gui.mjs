@@ -32,14 +32,14 @@ function start(name, isPrivate) {
 }
 function stop() { if (child) child.kill(); }
 
-const STYLED = `<style>
+const STYLE = `<style>
   body{background:#020617;color:#e2e8f0;font-family:system-ui;max-width:760px;margin:40px auto;padding:0 16px}
   h1{color:#10b981} input,button{padding:8px 12px;border-radius:8px;border:1px solid #1e293b;background:#0f172a;color:#e2e8f0}
   button{background:#10b981;color:#020617;font-weight:700;cursor:pointer;border:0}
   pre{background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:12px;height:340px;overflow:auto}
 </style>`;
 
-const page = (theme) => `<!doctype html><html><head><meta charset="utf-8"><title>ZenithMC Host</title>${theme === 'styled' ? STYLED : ''}</head><body>
+const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>ZenithMC Host</title>${STYLE}</head><body>
 <h1>ZenithMC Host</h1>
 <p>Name your server and press Start. Share <code>&lt;name&gt;.mc.zenithurl.com</code> with friends.</p>
 <div>
@@ -61,7 +61,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (req.method === 'GET' && url.pathname === '/') {
     res.writeHead(200, { 'Content-Type': 'text/html' });
-    return res.end(page(url.searchParams.get('theme')));
+    return res.end(page());
   }
   if (req.method === 'GET' && url.pathname === '/api/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });

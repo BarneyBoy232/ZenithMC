@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Terminal, Globe, Server, ServerOff, Copy, CheckCircle, Zap, Gauge, Infinity as InfinityIcon, Wifi, ArrowRight, Users, LogIn } from 'lucide-react';
+import { Download, Globe, Server, ServerOff, Copy, CheckCircle, Zap, Gauge, Infinity as InfinityIcon, Wifi, ArrowRight, Users, LogIn } from 'lucide-react';
 import { subscribeRooms } from './lib/registry.js';
 import { gate } from './lib/auth.js';
 
@@ -71,14 +71,12 @@ export default function App() {
             Run a server on your own machine and share it with a link. Friends connect
             <span className="text-slate-200"> straight to you</span> — no relay, no data cap, no setup.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a href="/downloads/ZenithMC-Host.exe" className="group inline-flex items-center gap-2.5 bg-emerald-500 hover:bg-emerald-400 text-[#06070a] font-bold text-base px-8 py-4 rounded-2xl transition-all hover:scale-[1.03] shadow-[0_0_60px_-12px_#10b981]">
-              <Download size={20} /> Download for Windows
+          <div className="flex flex-col items-center gap-2">
+            <a href="https://github.com/BarneyBoy232/ZenithMC/releases/latest/download/ZenithMC-Host-Setup.exe" className="group inline-flex items-center gap-2.5 bg-emerald-500 hover:bg-emerald-400 text-[#06070a] font-bold text-base px-8 py-4 rounded-2xl transition-all hover:scale-[1.03] shadow-[0_0_60px_-12px_#10b981]">
+              <Download size={20} /> Download to host a server
               <ArrowRight size={18} className="opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all" />
             </a>
-            <a href="/downloads/ZenithMC-Host-Console.exe" className="inline-flex items-center gap-2 border border-white/10 hover:border-emerald-500/40 hover:bg-white/5 text-slate-300 hover:text-white font-medium px-6 py-4 rounded-2xl transition-colors">
-              <Terminal size={18} /> Console version
-            </a>
+            <p className="text-xs text-slate-600">Windows · this is for hosts. Joining a friend? Open their link instead.</p>
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-sm text-slate-500">
             <span className="inline-flex items-center gap-1.5"><Gauge size={15} className="text-emerald-400/80" /> ~direct latency</span>

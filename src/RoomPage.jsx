@@ -121,9 +121,9 @@ export default function RoomPage({ room }) {
                     You'll need the ZenithMC connector — a tiny helper, downloaded once. Run it once
                     and it stays ready in the background; you'll never touch it again.
                   </p>
-                  <button className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition-all hover:scale-105">
+                  <a href="https://github.com/BarneyBoy232/ZenithMC/releases/latest/download/ZenithMC-Connector-Setup.exe" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition-all hover:scale-105">
                     <Download size={20} /> Download Connector
-                  </button>
+                  </a>
                   <p className="text-slate-600 text-xs mt-3">
                     Already installed?{' '}
                     <button onClick={() => connectorStatus().then(setHasConnector)} className="underline hover:text-emerald-400">
