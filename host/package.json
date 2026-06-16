@@ -11,7 +11,6 @@
   "scripts": {
     "start": "node src/index.mjs",
     "gui": "node src/gui.mjs",
-    "icon": "node build/gen-icon.mjs",
     "bundle": "node build/bundle.mjs",
     "dist": "node build/bundle.mjs && electron-builder",
     "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/analytics.mjs && node --check src/p2p.mjs && node --check src/gui.mjs && node --check src/controller.mjs && node --check electron-main.mjs",
@@ -31,6 +30,7 @@
     "esbuild": "^0.28.1"
   },
   "build": {
+    "directories": { "buildResources": "build-resources" },
     "appId": "com.zenithurl.zenithmc.host",
     "productName": "ZenithMC Host",
     "artifactName": "ZenithMC-Host-Setup.${ext}",
