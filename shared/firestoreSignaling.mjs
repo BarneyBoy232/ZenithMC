@@ -9,9 +9,10 @@ import {
   getFirestore, initializeFirestore, doc, setDoc, onSnapshot, collection, query, where,
   addDoc, arrayUnion, serverTimestamp,
 } from 'firebase/firestore';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 import { firebaseConfig, SUBPROJECT } from './firebaseConfig.mjs';
 
-let _db;
+let _db, _auth, _uid, _readyP;
 export function getDb() {
   if (!_db) {
     const app = getApps()[0] ?? initializeApp(firebaseConfig);
@@ -20,9 +21,15 @@ export function getDb() {
     _db = typeof window === 'undefined'
       ? initializeFirestore(app, { experimentalForceLongPolling: true })
       : getFirestore(app);
+    _auth = getAuth(app);
+    _readyP = signInAnonymously(_auth).then((c) => { _uid = c.user.uid; return _uid; }).catch(() => null);
   }
   return _db;
 }
+
+// Resolves when anonymous sign-in completes (so writes carry an identity).
+export function authReady() { return _readyP ?? Promise.resolve(null); }
+export function currentUid() { return _uid ?? _auth?.currentUser?.uid ?? null; }
 
 const sigId = (room, session) => `sig_${room}_${session}`;
 
@@ -30,7 +37,7 @@ const sigId = (room, session) => `sig_${room}_${session}`;
 export function publishRoom(db, room, data) {
   return setDoc(
     doc(db, SUBPROJECT, `room_${room}`),
-    { kind: 'room', room, online: true, updatedAt: serverTimestamp(), ...data },
+    { kind: 'room', room, online: true, ownerUid: currentUid(), updatedAt: serverTimestamp(), ...data },
     { merge: true },
   );
 }

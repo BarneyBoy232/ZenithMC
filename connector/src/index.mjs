@@ -10,7 +10,7 @@ import net from 'node:net';
 import crypto from 'node:crypto';
 import dc from 'node-datachannel';
 import { friendSide } from '../../shared/webrtcBridge.mjs';
-import { getDb, friendSignaling } from '../../shared/firestoreSignaling.mjs';
+import { getDb, authReady, friendSignaling } from '../../shared/firestoreSignaling.mjs';
 import { normalizeRoom, isValidRoom } from '../../shared/validate.mjs';
 
 const ROOM = process.env.ZMC_ROOM;
@@ -36,8 +36,10 @@ export async function startConnector({ room = ROOM, preferredLocal = PREFERRED_L
   room = normalizeRoom(room);
   if (!isValidRoom(room)) throw new Error('Invalid room name (use letters, numbers, dashes).');
 
+  const db = getDb();
+  await authReady(); // carry an identity on every write
   const session = crypto.randomUUID();
-  const signaling = friendSignaling(getDb(), room, session);
+  const signaling = friendSignaling(db, room, session);
   const friend = friendSide(dc, { signaling }); // creates the offer + wires signaling
 
   await new Promise((resolve, reject) => {

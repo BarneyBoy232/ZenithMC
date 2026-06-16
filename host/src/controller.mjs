@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events';
 import { MinecraftServer } from './mcServer.mjs';
 import { SessionTracker } from './analytics.mjs';
 import { startHostP2P } from './p2p.mjs';
-import { getDb, publishRoom, takedownRoom, writeSession } from '../../shared/firestoreSignaling.mjs';
+import { getDb, authReady, publishRoom, takedownRoom, writeSession } from '../../shared/firestoreSignaling.mjs';
 import { normalizeRoom, isValidRoom } from '../../shared/validate.mjs';
 
 // import.meta.url is empty once esbuild-bundled to CJS, so guard the path math.
@@ -54,6 +54,7 @@ export class HostController extends EventEmitter {
     const mc = new MinecraftServer({ name: room, dir: serverDir, port, memoryMb: mem, version });
     const sessions = new SessionTracker();
     const db = getDb();
+    await authReady(); // carry an identity on every write
     this.mc = mc;
 
     mc.on('log', (l) => this.#push(l));
@@ -62,6 +63,9 @@ export class HostController extends EventEmitter {
       this.p2p = startHostP2P({ room, targetPort: port });
       await publishRoom(db, room, { motd: mc.motd, version: mc.version, playerCount: 0, private: !!isPrivate });
       this.#push(`Room live: mc.zenithurl.com/${room} (${isPrivate ? 'private' : 'public'})`);
+      // Heartbeat so the room stays "fresh"; a crashed/old instance goes stale and
+      // its name can be reclaimed.
+      this.heartbeat = setInterval(() => publishRoom(db, room, {}).catch(() => {}), 60000);
     });
     mc.on('player-join', async ({ name, count }) => {
       sessions.join(name, Date.now());
@@ -76,6 +80,7 @@ export class HostController extends EventEmitter {
     });
     mc.on('stopped', async () => {
       this.running = false;
+      clearInterval(this.heartbeat);
       this.p2p?.stop();
       this.p2p = null;
       this.mc = null;
