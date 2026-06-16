@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
-    "abstrak": "^0.1.0",
+    "abstrak": "^0.1.1",
     "autoprefixer": "^10.4.27",
     "firebase": "^12.14.0",
     "lucide-react": "^1.8.0",

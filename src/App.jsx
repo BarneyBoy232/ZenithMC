@@ -24,6 +24,11 @@ export default function App() {
     setUser(null);
   };
 
+  // Restore an existing session on load (no prompt).
+  useEffect(() => {
+    gate.getCurrentUser?.().then((u) => { if (u) setUser(u); }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     let unsub;
     try {

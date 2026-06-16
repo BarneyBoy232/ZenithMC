@@ -15,6 +15,11 @@ export default function AdminPage() {
 
   const authorized = user && user.email === ADMIN_EMAIL;
 
+  // Restore an existing session on load (no prompt).
+  useEffect(() => {
+    gate.getCurrentUser?.().then((u) => { if (u) setUser(u); }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!authorized) return;
     const unsubR = subscribeAllRooms(setRooms);
