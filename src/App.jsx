@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Globe, Server, ServerOff, Copy, CheckCircle, Zap, Gauge, Infinity as InfinityIcon, Wifi, ArrowRight, Users, LogIn } from 'lucide-react';
+import { Download, Globe, Server, ServerOff, Copy, CheckCircle, Zap, Gauge, Infinity as InfinityIcon, Wifi, ArrowRight, Users, LogIn, LogOut } from 'lucide-react';
 import { subscribeRooms } from './lib/registry.js';
 import { gate } from './lib/auth.js';
 
@@ -55,9 +55,14 @@ export default function App() {
             <span>mc.zenithurl.com</span>
           </div>
           {user ? (
-            <button onClick={signOut} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white px-3 py-1.5 rounded-full border border-white/10 hover:border-white/20 transition-colors">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {user.email}
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-2 text-sm text-slate-300 px-3 py-1.5 rounded-full border border-white/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {user.email}
+              </span>
+              <button onClick={signOut} title="Sign out" aria-label="Sign out" className="grid place-items-center w-8 h-8 rounded-full border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-colors">
+                <LogOut size={15} />
+              </button>
+            </div>
           ) : (
             <button onClick={signIn} className="flex items-center gap-2 text-sm font-medium text-slate-200 hover:text-white px-4 py-1.5 rounded-full border border-white/10 hover:border-emerald-500/40 hover:bg-white/5 transition-colors">
               <LogIn size={15} /> Sign in
