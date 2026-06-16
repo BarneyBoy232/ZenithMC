@@ -15,7 +15,8 @@ import { Readable } from 'node:stream';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 
-const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
+const PAPER_API = 'https://fill.papermc.io/v3/projects/paper';
+const PAPER_UA = { 'User-Agent': 'ZenithMC/1.0 (+https://mc.zenithurl.com)' };
 const JRE_API = 'https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse';
 
 /**
@@ -70,14 +71,16 @@ export async function ensurePaper(dir, version = '1.21.11') {
 
   await mkdir(dir, { recursive: true });
 
-  const buildsRes = await fetch(`${PAPER_API}/versions/${version}/builds`);
-  if (!buildsRes.ok) throw new Error(`Paper builds lookup failed (${buildsRes.status})`);
-  const { builds } = await buildsRes.json();
-  const latest = builds.at(-1);
-  const jarName = latest.downloads.application.name;
-  const url = `${PAPER_API}/versions/${version}/builds/${latest.build}/downloads/${jarName}`;
+  const buildsRes = await fetch(`${PAPER_API}/versions/${version}/builds`, { headers: PAPER_UA });
+  if (!buildsRes.ok) throw new Error(`Paper builds lookup failed (${buildsRes.status}) for ${version}`);
+  const data = await buildsRes.json();
+  const builds = Array.isArray(data) ? data : (data.builds || []);
+  if (!builds.length) throw new Error(`No Paper builds found for ${version}`);
+  const latest = builds.reduce((a, b) => (b.id > a.id ? b : a));
+  const url = latest.downloads?.['server:default']?.url;
+  if (!url) throw new Error('No server download in latest Paper build');
 
-  const dl = await fetch(url);
+  const dl = await fetch(url, { headers: PAPER_UA });
   if (!dl.ok || !dl.body) throw new Error(`Paper jar download failed (${dl.status})`);
 
   await new Promise((resolve, reject) => {
