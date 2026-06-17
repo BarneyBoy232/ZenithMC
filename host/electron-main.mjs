@@ -26,7 +26,7 @@ if (!app.requestSingleInstanceLock()) {
     win.loadURL(`http://127.0.0.1:${PORT}`);
   });
 
-  // Stop the Minecraft server cleanly when the app closes.
-  app.on('before-quit', () => { try { panel?.controller.stop(); } catch { /* none */ } });
+  // Stop all running servers cleanly when the app closes.
+  app.on('before-quit', () => { try { panel?.manager.stopAll(); } catch { /* none */ } });
   app.on('window-all-closed', () => app.quit());
 }

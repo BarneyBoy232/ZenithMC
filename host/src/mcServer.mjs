@@ -117,14 +117,26 @@ export class MinecraftServer extends EventEmitter {
 
   async #writeConfig() {
     await writeFile(join(this.dir, 'eula.txt'), 'eula=true\n');
-    const props = [
-      `motd=${this.motd}`,
-      `server-port=${this.port}`,
-      'online-mode=true',
-      'enable-status=true',
-      'max-players=20',
-    ].join('\n');
-    await writeFile(join(this.dir, 'server.properties'), props + '\n');
+
+    // If a server.properties already exists (attaching an existing server), keep
+    // the host's settings and only override the port. Otherwise write defaults.
+    const existing = await readFile(join(this.dir, 'server.properties'), 'utf8').catch(() => null);
+    let props;
+    if (existing) {
+      props = existing
+        .split(/\r?\n/)
+        .filter((l) => l && !l.startsWith('server-port='))
+        .concat(`server-port=${this.port}`);
+    } else {
+      props = [
+        `motd=${this.motd}`,
+        `server-port=${this.port}`,
+        'online-mode=true',
+        'enable-status=true',
+        'max-players=20',
+      ];
+    }
+    await writeFile(join(this.dir, 'server.properties'), props.join('\n') + '\n');
   }
 
   async start() {
