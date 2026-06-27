@@ -22,10 +22,17 @@ export function roomKeyFromHost(loc = window.location) {
   return isValidRoom(candidate) ? candidate : null;
 }
 
+// A host heartbeats every 60s; if we haven't heard from it in this window it has
+// stopped/crashed/closed the app, so it's no longer really online.
+const FRESH_MS = 150000;
+
 function normalize(s) {
+  const lastSeen = s.updatedAt?.toMillis?.() ?? 0;
   return {
     room: s.room,
     online: !!s.online,
+    lastSeen,
+    live: !!s.online && Date.now() - lastSeen < FRESH_MS,
     motd: s.motd ?? null,
     version: s.version ?? null,
     playerCount: s.playerCount ?? 0,
@@ -35,15 +42,24 @@ function normalize(s) {
 
 // Live subscription to one room. Returns an unsubscribe function.
 export function subscribeRoom(room, cb) {
-  return watchRoom(getDb(), room, (data) => cb(normalize(data)));
+  return watchRoom(getDb(), room, (data) => {
+    const r = normalize(data);
+    cb({ ...r, online: r.live }); // a stale room reads as offline to visitors
+  });
 }
 
-// Live subscription to all online rooms (landing-page network panel).
+// Public bar: only servers that are actually live (online AND fresh). A timer
+// re-checks freshness so a host that stops/crashes drops off even without a new
+// snapshot.
 export function subscribeRooms(cb) {
-  return watchPublicRooms(getDb(), (list) => cb(list.map(normalize)));
+  let latest = [];
+  const emit = () => cb(latest.map(normalize).filter((r) => r.live));
+  const unsub = watchPublicRooms(getDb(), (list) => { latest = list; emit(); });
+  const timer = setInterval(emit, 15000);
+  return () => { unsub(); clearInterval(timer); };
 }
 
-// Admin-only live subscriptions.
+// Admin-only: EVERY room ever created (active or not). `live` flags the active ones.
 export function subscribeAllRooms(cb) {
   return watchAllRooms(getDb(), (list) => cb(list.map(normalize)));
 }

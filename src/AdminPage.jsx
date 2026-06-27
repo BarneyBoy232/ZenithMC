@@ -39,7 +39,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans">
       <nav className="border-b border-slate-800 px-4 h-16 flex items-center gap-2 font-bold text-xl">
-        <Globe className="text-emerald-500" /> ZenithMC admin
+        <img src="/logo.svg" alt="ZenithMC" className="w-7 h-7" /> ZenithMC admin
       </nav>
 
       <main className="max-w-5xl mx-auto px-4 py-12">
@@ -60,8 +60,8 @@ export default function AdminPage() {
         ) : (
           <>
             <div className="grid grid-cols-3 gap-4 mb-8">
-              <Stat label="Servers online" value={rooms.filter((r) => r.online).length} />
-              <Stat label="Players online" value={rooms.filter((r) => r.online).reduce((n, r) => n + (r.playerCount || 0), 0)} />
+              <Stat label="Servers live" value={rooms.filter((r) => r.live).length} />
+              <Stat label="Players online" value={rooms.filter((r) => r.live).reduce((n, r) => n + (r.playerCount || 0), 0)} />
               <Stat label="Total sessions" value={sessions.length} />
             </div>
 
@@ -70,7 +70,7 @@ export default function AdminPage() {
               {rooms.length === 0 ? <Empty text="No servers yet." /> : rooms.map((r, i) => (
                 <Row key={r.room} last={i === rooms.length - 1}>
                   <span className="font-mono">{r.room}</span>
-                  <span className={r.online ? 'text-emerald-400' : 'text-slate-500'}>{r.online ? 'online' : 'offline'}</span>
+                  <span className={r.live ? 'text-emerald-400' : 'text-slate-500'}>{r.live ? 'live' : 'offline'}</span>
                   <span className="flex items-center gap-1 text-slate-300"><Users size={14} />{r.playerCount || 0}</span>
                   <span className="text-slate-500">{r.version || '—'}</span>
                 </Row>

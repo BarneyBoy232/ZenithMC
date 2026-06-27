@@ -49,10 +49,8 @@ export default function App() {
       <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#06070a]/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5 font-bold text-lg tracking-tight">
-            <span className="grid place-items-center w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25">
-              <Globe className="text-emerald-400" size={18} />
-            </span>
-            <span>mc.zenithurl.com</span>
+            <img src="/logo.svg" alt="ZenithMC" className="w-8 h-8" />
+            <span>ZenithMC</span>
           </div>
           {user ? (
             <div className="flex items-center gap-2">

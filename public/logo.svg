@@ -1,0 +1,6 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ZenithMC">
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="#0b1220" stroke="#10b981" stroke-width="2"/>
+  <polygon points="32,14 45.9,22 32,30 18.1,22" fill="#34d399"/>
+  <polygon points="45.9,22 45.9,38 32,46 32,30" fill="#10b981"/>
+  <polygon points="18.1,22 18.1,38 32,46 32,30" fill="#059669"/>
+</svg>

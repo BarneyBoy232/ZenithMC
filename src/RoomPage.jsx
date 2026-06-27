@@ -73,7 +73,7 @@ export default function RoomPage({ room }) {
       <nav className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-            <Globe className="text-emerald-500" />
+            <img src="/logo.svg" alt="ZenithMC" className="w-7 h-7" />
             <span><span className="text-slate-500">mc.zenithurl.com/</span>{room}</span>
           </div>
           <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${hasConnector ? 'text-emerald-400 border-emerald-500/25 bg-emerald-500/10' : 'text-slate-500 border-white/10 bg-white/5'}`}>
