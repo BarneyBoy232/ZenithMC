@@ -12,7 +12,7 @@
     "start": "node src/index.mjs",
     "gui": "node src/gui.mjs",
     "bundle": "node build/bundle.mjs",
-    "dist": "node build/bundle.mjs && electron-builder",
+    "dist": "node build/gen-icon.mjs && node build/bundle.mjs && electron-builder",
     "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/analytics.mjs && node --check src/p2p.mjs && node --check src/gui.mjs && node --check src/controller.mjs && node --check src/manager.mjs && node --check electron-main.mjs",
     "test:p2p": "node test/webrtc-e2e.mjs",
     "test:firestore": "node test/firestore-e2e.mjs"
@@ -30,7 +30,6 @@
     "esbuild": "^0.28.1"
   },
   "build": {
-    "directories": { "buildResources": "build-resources" },
     "appId": "com.zenithurl.zenithmc.host",
     "productName": "ZenithMC Host",
     "artifactName": "ZenithMC-Host-Setup.${ext}",
@@ -42,7 +41,8 @@
       "**/node_modules/node-datachannel/**"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": true,

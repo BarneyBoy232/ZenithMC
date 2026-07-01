@@ -46,6 +46,19 @@ export async function ensureJava(dir) {
   return found;
 }
 
+/** Find the server jar to run inside an existing server folder. */
+async function findServerJar(dir) {
+  const files = await readdir(dir).catch(() => []);
+  const jars = files.filter((f) => f.toLowerCase().endsWith('.jar'));
+  if (!jars.length) return null;
+  return (
+    jars.find((f) => /^paper.*\.jar$/i.test(f)) ||
+    jars.find((f) => /^(purpur|spigot|craftbukkit).*\.jar$/i.test(f)) ||
+    jars.find((f) => /server\.jar$/i.test(f)) ||
+    jars[0]
+  );
+}
+
 async function findJavaExe(jreDir) {
   try {
     for (const entry of await readdir(jreDir)) {
@@ -102,7 +115,7 @@ export class MinecraftServer extends EventEmitter {
    * @param {string} [opts.version] Minecraft version
    * @param {string} [opts.motd]
    */
-  constructor({ name, dir, port = 25565, memoryMb = 2048, version = '1.21.11', motd }) {
+  constructor({ name, dir, port = 25565, memoryMb = 2048, version = '1.21.11', motd, attach = false }) {
     super();
     this.name = name;
     this.dir = dir;
@@ -110,6 +123,7 @@ export class MinecraftServer extends EventEmitter {
     this.memoryMb = memoryMb;
     this.version = version;
     this.motd = motd ?? `${name} — powered by ZenithMC`;
+    this.attach = attach; // attach an existing server folder (run its own jar)
     this.proc = null;
     this.players = new Set();
     this.ready = false;
@@ -141,12 +155,21 @@ export class MinecraftServer extends EventEmitter {
 
   async start() {
     const javaBin = await ensureJava(this.dir);
-    await ensurePaper(this.dir, this.version);
+
+    // Attaching an existing server: run its own jar, don't download Paper.
+    // New server: download the requested Paper build.
+    let jar = 'paper.jar';
+    if (this.attach) {
+      jar = await findServerJar(this.dir);
+      if (!jar) throw new Error('No server .jar found in that folder — is it a Minecraft server folder?');
+    } else {
+      await ensurePaper(this.dir, this.version);
+    }
     await this.#writeConfig();
 
     this.proc = spawn(
       javaBin,
-      [`-Xms${this.memoryMb}M`, `-Xmx${this.memoryMb}M`, '-jar', 'paper.jar', '--nogui'],
+      [`-Xms${this.memoryMb}M`, `-Xmx${this.memoryMb}M`, '-jar', jar, '--nogui'],
       { cwd: this.dir },
     );
 

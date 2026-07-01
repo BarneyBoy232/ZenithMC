@@ -51,7 +51,7 @@ export class HostController extends EventEmitter {
     this.log = [];
     this.players = 0;
     const serverDir = dir || join(this.baseDir, 'servers', room);
-    const mc = new MinecraftServer({ name: room, dir: serverDir, port, memoryMb: mem, version });
+    const mc = new MinecraftServer({ name: room, dir: serverDir, port, memoryMb: mem, version, attach: !!dir });
     const sessions = new SessionTracker();
     const db = getDb();
     await authReady(); // carry an identity on every write

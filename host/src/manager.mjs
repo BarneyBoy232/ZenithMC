@@ -51,7 +51,12 @@ export class ServerManager extends EventEmitter {
   state() { return { servers: this.list(), log: this.log }; }
 
   async start({ room, version, dir, isPrivate, mem } = {}) {
-    const r = String(room || '').toLowerCase().trim();
+    // When attaching an existing folder without a name, derive one from the folder.
+    let r = String(room || '').toLowerCase().trim();
+    if (!r && dir) {
+      r = String(dir.split(/[\\/]/).filter(Boolean).pop() || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 32);
+    }
+    if (!r) throw new Error('Please enter a server name.');
     if (this.servers.has(r)) throw new Error('A server with that name is already running.');
     const used = new Set([...this.servers.values()].map((s) => s.port));
     const port = await findFreePort(25565, used);

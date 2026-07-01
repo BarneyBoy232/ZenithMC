@@ -42,8 +42,10 @@ __pycache__/
 
 # Electron packaging (generated)
 connector/build/tray.png
+connector/build/icon.ico
 connector/dist/
 connector/dist-bundle/
 host/build/icon.png
+host/build/icon.ico
 host/dist/
 host/dist-bundle/

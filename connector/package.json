@@ -34,7 +34,7 @@
     "artifactName": "ZenithMC-Connector-Setup.${ext}",
     "files": ["dist-bundle/**", "build/tray.png", "node_modules/node-datachannel/**"],
     "asarUnpack": ["**/node_modules/node-datachannel/**"],
-    "win": { "target": "nsis" },
+    "win": { "target": "nsis", "icon": "build/icon.ico" },
     "nsis": { "oneClick": true, "perMachine": false, "runAfterFinish": true }
   }
 }
