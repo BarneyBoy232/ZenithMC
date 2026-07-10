@@ -12,6 +12,7 @@
     "start": "node src/index.mjs",
     "gui": "node src/gui.mjs",
     "bundle": "node build/bundle.mjs",
+    "predist": "taskkill /F /IM \"ZenithMC Host.exe\" >nul 2>nul || rem",
     "dist": "node build/gen-icon.mjs && node build/bundle.mjs && electron-builder",
     "check": "node --check src/index.mjs && node --check src/mcServer.mjs && node --check src/analytics.mjs && node --check src/p2p.mjs && node --check src/gui.mjs && node --check src/controller.mjs && node --check src/manager.mjs && node --check electron-main.mjs",
     "test:p2p": "node test/webrtc-e2e.mjs",
