@@ -174,10 +174,6 @@ export default function RoomPage({ room }) {
           </div>
         )}
       </main>
-
-      <footer className="border-t border-slate-800 py-10 text-center text-slate-500 text-xs uppercase tracking-widest">
-        <span className="inline-flex items-center gap-1"><Zap size={12} className="text-emerald-500" /> Direct P2P • no relay • no data cap</span>
-      </footer>
     </div>
   );
 }

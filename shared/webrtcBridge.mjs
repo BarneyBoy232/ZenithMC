@@ -18,9 +18,27 @@ export const DEFAULT_ICE = ['stun:stun.l.google.com:19302', 'stun:stun1.l.google
 function wireSignaling(pc, signaling) {
   pc.onLocalDescription((sdp, type) => signaling.send({ sdp, type }));
   pc.onLocalCandidate((cand, mid) => signaling.send({ cand, mid }));
+
+  // ICE candidates can arrive over the Firestore mailbox BEFORE the remote SDP.
+  // Applying one early makes libdatachannel throw "remote candidate without remote
+  // description", and unguarded that uncaught exception crashes the whole process
+  // (the connector's error dialog). So: buffer candidates until the remote
+  // description is set, and never let a malformed handshake message be fatal.
+  let remoteReady = false;
+  const queued = [];
   signaling.onRecv((m) => {
-    if (m.sdp != null) pc.setRemoteDescription(m.sdp, m.type);
-    else if (m.cand != null) pc.addRemoteCandidate(m.cand, m.mid);
+    try {
+      if (m.sdp != null) {
+        pc.setRemoteDescription(m.sdp, m.type);
+        remoteReady = true;
+        for (const c of queued.splice(0)) {
+          try { pc.addRemoteCandidate(c.cand, c.mid); } catch { /* stale/invalid candidate */ }
+        }
+      } else if (m.cand != null) {
+        if (remoteReady) pc.addRemoteCandidate(m.cand, m.mid);
+        else queued.push(m);
+      }
+    } catch { /* a bad signaling message must not take down the process */ }
   });
 }
 
