@@ -51,6 +51,9 @@ export class ServerManager extends EventEmitter {
   state() { return { servers: this.list(), log: this.log }; }
 
   async start({ room, version, dir, isPrivate, mem } = {}) {
+    // Explorer's "Copy as path" wraps the path in quotes; strip those + whitespace
+    // so the folder actually resolves (otherwise the jar scan silently finds nothing).
+    if (dir) dir = String(dir).trim().replace(/^["']+|["']+$/g, '');
     // When attaching an existing folder without a name, derive one from the folder.
     let r = String(room || '').toLowerCase().trim();
     if (!r && dir) {

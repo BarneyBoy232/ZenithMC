@@ -105,6 +105,17 @@ export async function ensurePaper(dir, version = '1.21.11') {
   return jarPath;
 }
 
+/** List installable Minecraft versions for the dropdown — clean stable Paper
+ * releases (e.g. 1.21.11), newest first, dropping rc/pre/experimental builds. */
+export async function listVersions() {
+  const res = await fetch(`${PAPER_API}/versions`, { headers: PAPER_UA });
+  if (!res.ok) throw new Error(`Paper versions lookup failed (${res.status})`);
+  const data = await res.json();
+  const ids = (data.versions || []).map((v) => v?.version?.id ?? v?.version ?? v).filter(Boolean);
+  const stable = ids.filter((id) => /^1\.\d+(\.\d+)?$/.test(id));
+  return stable.length ? stable : ids;
+}
+
 export class MinecraftServer extends EventEmitter {
   /**
    * @param {object} opts
@@ -161,7 +172,14 @@ export class MinecraftServer extends EventEmitter {
     let jar = 'paper.jar';
     if (this.attach) {
       jar = await findServerJar(this.dir);
-      if (!jar) throw new Error('No server .jar found in that folder — is it a Minecraft server folder?');
+      if (!jar) {
+        const files = await readdir(this.dir).catch(() => null);
+        throw new Error(
+          files === null
+            ? `Can't open that folder: ${this.dir}`
+            : `No .jar found in ${this.dir}. Files there: ${files.join(', ') || '(folder is empty)'}`,
+        );
+      }
     } else {
       await ensurePaper(this.dir, this.version);
     }

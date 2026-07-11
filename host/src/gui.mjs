@@ -5,14 +5,18 @@
 
 import http from 'node:http';
 import { ServerManager } from './manager.mjs';
+import { listVersions } from './mcServer.mjs';
 
 const manager = new ServerManager();
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <rect x="2" y="2" width="60" height="60" rx="16" fill="#0b1220" stroke="#10b981" stroke-width="2"/>
-  <polygon points="32,14 45.9,22 32,30 18.1,22" fill="#34d399"/>
-  <polygon points="45.9,22 45.9,38 32,46 32,30" fill="#10b981"/>
-  <polygon points="18.1,22 18.1,38 32,46 32,30" fill="#059669"/></svg>`;
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
+  <rect x="15" y="10" width="34" height="44" rx="6" fill="#33214d"/>
+  <rect x="16" y="12" width="3" height="3" fill="#4a3170"/><rect x="45" y="12" width="3" height="3" fill="#4a3170"/>
+  <rect x="16" y="44" width="3" height="3" fill="#4a3170"/><rect x="45" y="44" width="3" height="3" fill="#4a3170"/>
+  <rect x="20" y="15" width="24" height="34" rx="8" fill="#7c3aed"/>
+  <rect x="24" y="20" width="5" height="5" fill="#a855f7"/><rect x="33" y="26" width="6" height="6" fill="#c084fc"/>
+  <rect x="25" y="34" width="6" height="6" fill="#a855f7"/><rect x="30" y="41" width="5" height="5" fill="#d8b4fe"/></svg>`;
 
 const STYLE = `<style>
   :root{color-scheme:dark}
@@ -25,7 +29,10 @@ const STYLE = `<style>
   .tab{padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#94a3b8;font-weight:600;font-size:14px;cursor:pointer}
   .tab.active{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.4);color:#34d399}
   label{display:block;color:#94a3b8;font-size:13px;margin:12px 0 6px}
-  input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #1e293b;background:#0f172a;color:#e2e8f0;font-size:14px}
+  input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #1e293b;background:#0f172a;color:#e2e8f0;font-size:14px}
+  .row{display:flex;gap:8px;align-items:stretch}
+  .btn-alt{padding:0 16px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#cbd5e1;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .btn-alt:hover{border-color:rgba(255,255,255,.3)}
   .hint{color:#64748b;font-size:12px;margin-top:5px}
   .chk{display:flex;align-items:center;gap:8px;margin-top:14px;color:#cbd5e1;font-size:14px}
   .chk input{width:auto}
@@ -55,17 +62,20 @@ const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>Zeni
 
   <div id="pane-new">
     <label>Server name</label>
-    <input id="n-room" placeholder="barneysworld">
+    <input id="n-room" placeholder="my-world">
     <label>Minecraft version</label>
-    <input id="n-version" value="1.21.11">
+    <select id="n-version"><option value="1.21.11">1.21.11</option></select>
     <label class="chk"><input type="checkbox" id="n-public" checked> List publicly on mc.zenithurl.com</label>
     <button class="btn" onclick="startNew()">Start new server</button>
   </div>
 
   <div id="pane-existing" class="hide">
     <label>Server folder</label>
-    <input id="e-dir" placeholder="C:\\Users\\you\\Documents\\MyServer">
-    <div class="hint">Attach a server you already have — paste the folder that holds it. The name, version and world are taken from what's there.</div>
+    <div class="row">
+      <input id="e-dir" placeholder="C:\\Users\\you\\Documents\\MyServer">
+      <button class="btn-alt" onclick="browse()">Browse…</button>
+    </div>
+    <div class="hint">Attach a server you already have — pick or paste the folder that holds its .jar. The name, version and world are taken from what's there.</div>
     <label class="chk"><input type="checkbox" id="e-public" checked> List publicly on mc.zenithurl.com</label>
     <button class="btn" onclick="startExisting()">Attach and start</button>
   </div>
@@ -93,7 +103,26 @@ async function post(body){
   if(!r.ok){ const e=await r.json().catch(()=>({})); document.getElementById('err').textContent=e.error||'Failed to start.'; }
 }
 function startNew(){ post({ room:document.getElementById('n-room').value, version:document.getElementById('n-version').value||undefined, public:document.getElementById('n-public').checked }); }
-function startExisting(){ post({ dir:document.getElementById('e-dir').value, public:document.getElementById('e-public').checked }); }
+function startExisting(){
+  const d = document.getElementById('e-dir').value.trim().replace(/^["']+|["']+$/g,'');
+  post({ dir:d, public:document.getElementById('e-public').checked });
+}
+async function browse(){
+  try{
+    const r = await fetch('/api/pick-dir',{method:'POST'});
+    const j = await r.json();
+    if(j.dir) document.getElementById('e-dir').value = j.dir;
+  }catch(e){}
+}
+async function loadVersions(){
+  try{
+    const j = await (await fetch('/api/versions')).json();
+    if(Array.isArray(j.versions) && j.versions.length){
+      document.getElementById('n-version').innerHTML =
+        j.versions.map(v=>'<option value="'+v+'">'+v+'</option>').join('');
+    }
+  }catch(e){}
+}
 async function stop(room){ await fetch('/api/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})}); }
 async function tick(){
   try{
@@ -104,10 +133,10 @@ async function tick(){
     document.getElementById('log').textContent=s.log.join('\\n');
   }catch(e){}
 }
-setInterval(tick,1000); tick();
+setInterval(tick,1000); tick(); loadVersions();
 </script></body></html>`;
 
-export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800), baseDir } = {}) {
+export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800), baseDir, pickDirectory } = {}) {
   if (baseDir) manager.baseDir = baseDir;
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -118,6 +147,17 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
     if (req.method === 'GET' && url.pathname === '/api/status') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify(manager.state()));
+    }
+    if (req.method === 'GET' && url.pathname === '/api/versions') {
+      const versions = await listVersions().catch(() => ['1.21.11']);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ versions }));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/pick-dir') {
+      let dir = null;
+      try { dir = pickDirectory ? await pickDirectory() : null; } catch { dir = null; }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ dir }));
     }
     if (req.method === 'POST' && url.pathname === '/api/start') {
       let body = ''; for await (const c of req) body += c;

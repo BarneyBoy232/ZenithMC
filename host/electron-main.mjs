@@ -4,19 +4,29 @@
 //
 // Bundled by build/bundle.mjs (esbuild) so shared/ imports are inlined.
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import { join } from 'node:path';
 import { startGuiServer } from './src/gui.mjs';
 
 const PORT = 7800;
 let panel;
+let win;
+
+// Native "Browse…" folder picker for the Existing-server tab.
+async function pickDirectory() {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Select your Minecraft server folder',
+    properties: ['openDirectory'],
+  });
+  return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.whenReady().then(() => {
-    panel = startGuiServer({ port: PORT, baseDir: app.getPath('userData') });
-    const win = new BrowserWindow({
+    panel = startGuiServer({ port: PORT, baseDir: app.getPath('userData'), pickDirectory });
+    win = new BrowserWindow({
       width: 920,
       height: 700,
       title: 'ZenithMC Host',
