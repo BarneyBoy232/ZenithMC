@@ -1,45 +1,55 @@
-// logoRaster.mjs — draws the ZenithMC logo (emerald isometric block on a dark
-// rounded badge) to a PNG at any size, and wraps a 256px PNG into a Windows .ico.
-// Dependency-free, so app icons are generated at build time with no extra tooling.
+// logoRaster.mjs — draws the ZenithMC logo (a Minecraft nether portal: a purple
+// portal framed in obsidian on a dark rounded badge) to a PNG at any size, and
+// wraps a 256px PNG into a Windows .ico. Dependency-free, so app icons are
+// generated at build time with no extra tooling. Mirrors public/logo.svg.
 
 import { deflateSync } from 'node:zlib';
 
-// Cube face polygons in normalized 0..1 coords (matches public/logo.svg / 64 viewBox).
-const T = [0.5, 0.21875], R = [0.717, 0.34375], L = [0.283, 0.34375];
-const C = [0.5, 0.46875], RB = [0.717, 0.59375], LB = [0.283, 0.59375], B = [0.5, 0.71875];
-const TOP = [T, R, C, L], RIGHT = [R, RB, B, C], LEFT = [L, LB, B, C];
+// Rounded-rect hit test in normalized 0..1 coords.
+function inRR(px, py, x0, y0, x1, y1, r) {
+  if (px < x0 || px > x1 || py < y0 || py > y1) return false;
+  const dx = px < x0 + r ? x0 + r - px : (px > x1 - r ? px - (x1 - r) : 0);
+  const dy = py < y0 + r ? y0 + r - py : (py > y1 - r ? py - (y1 - r) : 0);
+  return dx * dx + dy * dy <= r * r;
+}
 
-function inPoly(px, py, poly) {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i], [xj, yj] = poly[j];
-    if (((yi > py) !== (yj > py)) && (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi)) inside = !inside;
-  }
-  return inside;
+// Plain axis-aligned rect hit test in normalized coords.
+function inBox(px, py, x, y, w, h) {
+  return px >= x && px <= x + w && py >= y && py <= y + h;
 }
 
 export function makeLogoPng(size) {
-  const S = size;
+  const S = size, U = 1 / 64; // one SVG unit expressed in normalized coords
   const raw = Buffer.alloc((S * 4 + 1) * S);
-  const m = 2 / 64, rad = 16 / 64, bw = 2 / 64;
-  const inRR = (px, py, inset) => {
-    const x0 = m + inset, y0 = m + inset, x1 = 1 - m - inset, y1 = 1 - m - inset, r = Math.max(0, rad - inset);
-    if (px < x0 || px > x1 || py < y0 || py > y1) return false;
-    const dx = px < x0 + r ? x0 + r - px : (px > x1 - r ? px - (x1 - r) : 0);
-    const dy = py < y0 + r ? y0 + r - py : (py > y1 - r ? py - (y1 - r) : 0);
-    return dx * dx + dy * dy <= r * r;
-  };
+  // Swirl + sparkle pixels painted over the portal, matching public/logo.svg.
+  // Each entry: [x, y, w, h, r, g, b] in SVG units.
+  const pixels = [
+    [24, 20, 5, 5, 168, 85, 247], [33, 26, 6, 6, 192, 132, 252],
+    [25, 34, 6, 6, 168, 85, 247], [30, 41, 5, 5, 216, 180, 254],
+    [35, 18, 3, 3, 245, 208, 254], [22, 30, 3, 3, 245, 208, 254],
+  ];
+  // Obsidian corner highlight blocks (top-left of each is x,y in SVG units).
+  const corners = [[16, 12], [45, 12], [16, 44], [45, 44]];
   let o = 0;
   for (let y = 0; y < S; y++) {
-    raw[o++] = 0;
+    raw[o++] = 0; // PNG filter byte, one per scanline
     for (let x = 0; x < S; x++) {
       const nx = (x + 0.5) / S, ny = (y + 0.5) / S;
       let r = 0, g = 0, b = 0, a = 0;
-      if (inRR(nx, ny, 0)) {
-        if (inRR(nx, ny, bw)) { r = 11; g = 18; b = 32; a = 255; } else { r = 16; g = 185; b = 129; a = 255; }
-        if (inPoly(nx, ny, TOP)) { r = 52; g = 211; b = 153; }
-        else if (inPoly(nx, ny, RIGHT)) { r = 16; g = 185; b = 129; }
-        else if (inPoly(nx, ny, LEFT)) { r = 5; g = 150; b = 105; }
+      // Badge: purple border with a dark fill.
+      if (inRR(nx, ny, 2 * U, 2 * U, 62 * U, 62 * U, 14 * U)) {
+        a = 255;
+        if (inRR(nx, ny, 4 * U, 4 * U, 60 * U, 60 * U, 12 * U)) { r = 18; g = 10; b = 26; }
+        else { r = 168; g = 85; b = 247; }
+        // Obsidian frame around the portal.
+        if (inRR(nx, ny, 15 * U, 10 * U, 49 * U, 54 * U, 6 * U)) { r = 51; g = 33; b = 77; }
+        for (const [cx, cy] of corners)
+          if (inBox(nx, ny, cx * U, cy * U, 3 * U, 3 * U)) { r = 74; g = 49; b = 112; }
+        // Portal interior.
+        if (inRR(nx, ny, 20 * U, 15 * U, 44 * U, 49 * U, 8 * U)) { r = 124; g = 58; b = 237; }
+        // Swirl + sparkle pixels on top.
+        for (const [bx, by, bw, bh, pr, pg, pb] of pixels)
+          if (inBox(nx, ny, bx * U, by * U, bw * U, bh * U)) { r = pr; g = pg; b = pb; }
       }
       raw[o++] = r; raw[o++] = g; raw[o++] = b; raw[o++] = a;
     }
