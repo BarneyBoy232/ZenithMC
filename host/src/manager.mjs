@@ -1,10 +1,16 @@
 // manager.mjs — runs MANY servers at once, each its own HostController on its own
 // free port. The GUI talks to this: start adds a server, stop targets one by name,
 // and logs are tagged with [room] so it's clear which server each line is from.
+//
+// Every successfully started server is remembered in <baseDir>/servers.json so it
+// can be restarted from the GUI later (no digging through AppData), and any
+// remembered server can be exported as a .zip backup.
 
 import net from 'node:net';
+import { spawn } from 'node:child_process';
+import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, basename } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { HostController } from './controller.mjs';
 
@@ -31,8 +37,25 @@ export class ServerManager extends EventEmitter {
   constructor() {
     super();
     this.servers = new Map(); // room -> { room, port, ctrl }
+    this.known = new Map();   // room -> { room, dir|null, version|null, private, lastStarted }
     this.log = [];
     this.baseDir = ROOT;
+  }
+
+  #knownPath() { return join(this.baseDir, 'servers.json'); }
+
+  /** Load remembered servers from disk. Call after baseDir is final. */
+  async loadKnown() {
+    try {
+      const arr = JSON.parse(await readFile(this.#knownPath(), 'utf8'));
+      for (const k of arr) if (k?.room) this.known.set(k.room, k);
+    } catch { /* first run — nothing saved yet */ }
+  }
+
+  async #saveKnown() {
+    try {
+      await writeFile(this.#knownPath(), JSON.stringify([...this.known.values()], null, 2));
+    } catch { /* non-fatal */ }
   }
 
   #push(room, line) {
@@ -48,7 +71,15 @@ export class ServerManager extends EventEmitter {
     }));
   }
 
-  state() { return { servers: this.list(), log: this.log }; }
+  /** Remembered servers that are not currently running, newest first. */
+  previous() {
+    return [...this.known.values()]
+      .filter((k) => !this.servers.has(k.room))
+      .sort((a, b) => (b.lastStarted || 0) - (a.lastStarted || 0))
+      .map((k) => ({ room: k.room, lastStarted: k.lastStarted || null }));
+  }
+
+  state() { return { servers: this.list(), previous: this.previous(), log: this.log }; }
 
   async start({ room, version, dir, isPrivate, mem } = {}) {
     // Explorer's "Copy as path" wraps the path in quotes; strip those + whitespace
@@ -78,6 +109,70 @@ export class ServerManager extends EventEmitter {
       this.emit('change');
       throw e;
     }
+
+    // Remember it so it can be restarted from the GUI next time.
+    this.known.set(r, {
+      room: r,
+      dir: dir || null,
+      version: version || null,
+      private: !!isPrivate,
+      lastStarted: Date.now(),
+    });
+    await this.#saveKnown();
+  }
+
+  /** Restart a remembered server with the settings it last ran with. */
+  async restart(room) {
+    const k = this.known.get(String(room || '').toLowerCase().trim());
+    if (!k) throw new Error('Unknown server — start it once first.');
+    await this.start({
+      room: k.room,
+      dir: k.dir || undefined,
+      version: k.version || undefined,
+      isPrivate: !!k.private,
+    });
+  }
+
+  /** Resolve the folder a remembered server lives in. */
+  #dirFor(room) {
+    const k = this.known.get(room);
+    return (k && k.dir) || join(this.baseDir, 'servers', room);
+  }
+
+  /**
+   * Zip a remembered server's folder to <baseDir>/backups/<room>-<stamp>.zip.
+   * Uses Windows' built-in tar (bsdtar), which writes .zip via -a. The bundled
+   * JRE is excluded — it's ~50 MB of re-downloadable runtime, not world data.
+   * Best done while the server is stopped so the world files are settled.
+   */
+  async backup(room) {
+    room = String(room || '').toLowerCase().trim();
+    if (!this.known.has(room) && !this.servers.has(room)) throw new Error('Unknown server.');
+    const dir = this.#dirFor(room);
+    await access(dir).catch(() => { throw new Error(`Server folder not found: ${dir}`); });
+
+    const backups = join(this.baseDir, 'backups');
+    await mkdir(backups, { recursive: true });
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    const out = join(backups, `${room}-${stamp}.zip`);
+    const folder = basename(dir);
+
+    await new Promise((resolve, reject) => {
+      // Run from the backups folder with a RELATIVE archive name: bsdtar parses a
+      // "C:" drive prefix in -f as a remote host ("Cannot connect to C").
+      const p = spawn('tar', [
+        '-a', '-cf', basename(out),
+        '--exclude', `${folder}/jre`,
+        '--exclude', `${folder}/jre/*`,
+        '-C', dirname(dir), folder,
+      ], { cwd: backups });
+      let err = '';
+      p.stderr.on('data', (b) => { err += b; });
+      p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Backup failed: ${err || 'tar exited ' + code}`))));
+      p.on('error', reject);
+    });
+    this.#push(room, `Backup saved: ${out}`);
+    return out;
   }
 
   stop(room) { this.servers.get(String(room || '').toLowerCase().trim())?.ctrl.stop(); }

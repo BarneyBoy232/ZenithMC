@@ -151,7 +151,7 @@ export default function RoomPage({ room }) {
           ) : (
             <Step n={2} title="Paste into Minecraft">
               <p className="text-slate-400 text-sm mb-4">
-                In Minecraft → Multiplayer → Add Server, paste this address:
+                Direct link established. In Minecraft → Multiplayer → Add Server, paste this address:
               </p>
               <div className="flex items-center gap-3 bg-slate-950 border border-slate-700 rounded-xl p-2 pl-5">
                 <code className="flex-1 font-mono text-emerald-400 text-lg">{pasteAddr}</code>
@@ -163,7 +163,10 @@ export default function RoomPage({ room }) {
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <p className="text-slate-600 text-xs mt-3">You're connected directly to the host — no relay.</p>
+              <p className="text-slate-600 text-xs mt-3">
+                "localhost" is correct — it's the connector's private doorway on this PC. Everything
+                you send it travels straight to the host's machine over the direct link.
+              </p>
             </Step>
           )
         ) : (

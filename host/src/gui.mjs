@@ -9,6 +9,9 @@ import { listVersions } from './mcServer.mjs';
 
 const manager = new ServerManager();
 
+// Visible build stamp so it's obvious whether an installed app is stale.
+const BUILD = '2026-07-11.2';
+
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
   <rect x="15" y="10" width="34" height="44" rx="6" fill="#33214d"/>
@@ -52,7 +55,7 @@ const STYLE = `<style>
 
 const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>ZenithMC Host</title>${STYLE}</head><body>
 <div class="brand">${LOGO} ZenithMC Host</div>
-<p class="sub">Each server gets its own link: mc.zenithurl.com/&lt;name&gt;</p>
+<p class="sub">Each server gets its own link: mc.zenithurl.com/&lt;name&gt; · build ${BUILD}</p>
 
 <div class="card">
   <div class="tabs">
@@ -84,6 +87,12 @@ const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>Zeni
 
 <h2>Running servers</h2>
 <div class="card"><table><thead><tr><th>Name</th><th>Port</th><th>Players</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+
+<h2>Previous servers</h2>
+<div class="card">
+  <table><thead><tr><th>Name</th><th>Last started</th><th></th></tr></thead><tbody id="prev"></tbody></table>
+  <div class="hint" id="msg"></div>
+</div>
 
 <h2>Console</h2>
 <pre id="log"></pre>
@@ -124,12 +133,27 @@ async function loadVersions(){
   }catch(e){}
 }
 async function stop(room){ await fetch('/api/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})}); }
+async function restart(room){
+  document.getElementById('msg').textContent='Starting '+room+'…';
+  const r = await fetch('/api/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); document.getElementById('msg').textContent=e.error||'Failed to start.'; }
+  else document.getElementById('msg').textContent='';
+}
+async function backup(room){
+  document.getElementById('msg').textContent='Backing up '+room+'… (can take a minute on big worlds)';
+  const r = await fetch('/api/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
+  const j = await r.json().catch(()=>({}));
+  document.getElementById('msg').textContent = r.ok ? 'Backup saved: '+j.path : (j.error||'Backup failed.');
+}
 async function tick(){
   try{
     const s=await (await fetch('/api/status')).json();
     document.getElementById('rows').innerHTML = s.servers.length
       ? s.servers.map(x=>'<tr><td class="mono">'+x.room+'</td><td>'+x.port+'</td><td>'+(x.running?x.players:'starting…')+'</td><td style="text-align:right"><button class="btn-stop" onclick="stop(\\''+x.room+'\\')">Stop</button></td></tr>').join('')
       : '<tr><td class="empty" colspan="4">No servers running.</td></tr>';
+    document.getElementById('prev').innerHTML = (s.previous&&s.previous.length)
+      ? s.previous.map(x=>'<tr><td class="mono">'+x.room+'</td><td>'+(x.lastStarted?new Date(x.lastStarted).toLocaleString():'—')+'</td><td style="text-align:right"><button class="btn-stop" onclick="restart(\\''+x.room+'\\')">Start</button> <button class="btn-stop" onclick="backup(\\''+x.room+'\\')">Backup</button></td></tr>').join('')
+      : '<tr><td class="empty" colspan="3">Servers you\\'ve run before will show here.</td></tr>';
     document.getElementById('log').textContent=s.log.join('\\n');
   }catch(e){}
 }
@@ -138,6 +162,7 @@ setInterval(tick,1000); tick(); loadVersions();
 
 export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800), baseDir, pickDirectory } = {}) {
   if (baseDir) manager.baseDir = baseDir;
+  manager.loadKnown(); // restore the remembered-servers list (async, non-blocking)
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/') {
@@ -165,6 +190,27 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
         const b = JSON.parse(body || '{}');
         await manager.start({ room: b.room, version: b.version, dir: b.dir, isPrivate: b.public === false });
         res.writeHead(200); return res.end('{}');
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/restart') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        await manager.restart(JSON.parse(body || '{}').room);
+        res.writeHead(200); return res.end('{}');
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/backup') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const path = await manager.backup(JSON.parse(body || '{}').room);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ path }));
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: e.message }));

@@ -1,6 +1,6 @@
 {
   "name": "zenithmc-host",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ZenithMC host app — launches Minecraft servers and bridges them to friends over a direct P2P link.",
   "author": "ZenithURL",
   "type": "module",

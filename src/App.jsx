@@ -170,9 +170,14 @@ export default function App() {
                       <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5"><Users size={12} /> {s.playerCount} online</div>
                     </div>
                   </div>
-                  <button onClick={() => copy(url)} className="shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-medium hover:text-emerald-400 hover:border-emerald-500/30 transition-colors">
-                    {copied === url ? <CheckCircle size={15} /> : <Copy size={15} />}{copied === url ? 'Copied' : 'Copy'}
-                  </button>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <button onClick={() => copy(url)} title="Copy link" aria-label="Copy link" className="grid place-items-center w-9 h-9 bg-white/5 border border-white/10 rounded-xl hover:text-emerald-400 hover:border-emerald-500/30 transition-colors">
+                      {copied === url ? <CheckCircle size={15} /> : <Copy size={15} />}
+                    </button>
+                    <a href={`https://${url}`} className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-medium hover:text-emerald-400 hover:border-emerald-500/30 transition-colors">
+                      Open <ArrowRight size={15} />
+                    </a>
+                  </div>
                 </div>
               );
             })
