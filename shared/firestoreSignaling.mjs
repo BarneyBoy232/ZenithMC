@@ -48,13 +48,24 @@ export function takedownRoom(db, room) {
     { merge: true },
   );
 }
+// Update listing fields (privacy, delisted) WITHOUT implying the server is online —
+// publishRoom always sets online:true, which is wrong for a stopped server.
+export function updateRoom(db, room, data) {
+  return setDoc(
+    doc(db, SUBPROJECT, `room_${room}`),
+    { ...data, updatedAt: serverTimestamp() },
+    { merge: true },
+  );
+}
 export function watchRoom(db, room, cb) {
   return onSnapshot(doc(db, SUBPROJECT, `room_${room}`), (snap) =>
     cb(snap.exists() ? snap.data() : { room, online: false }));
 }
+// Public listings persist even while a server is offline. A room only leaves the
+// list when the host app finds its folder gone (delisted) or it's marked private.
 export function watchPublicRooms(db, cb) {
-  const q = query(collection(db, SUBPROJECT), where('kind', '==', 'room'), where('online', '==', true));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data()).filter((r) => !r.private)));
+  const q = query(collection(db, SUBPROJECT), where('kind', '==', 'room'));
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data()).filter((r) => !r.private && !r.delisted)));
 }
 // Admin views: every room (online or not) and every recorded session.
 export function watchAllRooms(db, cb) {

@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-07-11.2';
+const BUILD = '2026-07-12.1';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -30,7 +30,7 @@ const STYLE = `<style>
   .card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px}
   .tabs{display:flex;gap:8px;margin-bottom:14px}
   .tab{padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#94a3b8;font-weight:600;font-size:14px;cursor:pointer}
-  .tab.active{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.4);color:#34d399}
+  .tab.active{background:rgba(124,58,237,.16);border-color:rgba(168,85,247,.45);color:#c084fc}
   label{display:block;color:#94a3b8;font-size:13px;margin:12px 0 6px}
   input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #1e293b;background:#0f172a;color:#e2e8f0;font-size:14px}
   .row{display:flex;gap:8px;align-items:stretch}
@@ -139,6 +139,12 @@ async function restart(room){
   if(!r.ok){ const e=await r.json().catch(()=>({})); document.getElementById('msg').textContent=e.error||'Failed to start.'; }
   else document.getElementById('msg').textContent='';
 }
+async function privacy(room, makePrivate){
+  const r = await fetch('/api/privacy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,private:makePrivate})});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); document.getElementById('msg').textContent=e.error||'Failed to update privacy.'; }
+  else document.getElementById('msg').textContent='';
+  tick();
+}
 async function backup(room){
   document.getElementById('msg').textContent='Backing up '+room+'… (can take a minute on big worlds)';
   const r = await fetch('/api/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
@@ -152,7 +158,7 @@ async function tick(){
       ? s.servers.map(x=>'<tr><td class="mono">'+x.room+'</td><td>'+x.port+'</td><td>'+(x.running?x.players:'starting…')+'</td><td style="text-align:right"><button class="btn-stop" onclick="stop(\\''+x.room+'\\')">Stop</button></td></tr>').join('')
       : '<tr><td class="empty" colspan="4">No servers running.</td></tr>';
     document.getElementById('prev').innerHTML = (s.previous&&s.previous.length)
-      ? s.previous.map(x=>'<tr><td class="mono">'+x.room+'</td><td>'+(x.lastStarted?new Date(x.lastStarted).toLocaleString():'—')+'</td><td style="text-align:right"><button class="btn-stop" onclick="restart(\\''+x.room+'\\')">Start</button> <button class="btn-stop" onclick="backup(\\''+x.room+'\\')">Backup</button></td></tr>').join('')
+      ? s.previous.map(x=>'<tr><td class="mono">'+x.room+(x.private?' <span style="color:#64748b;font-size:11px">(private)</span>':'')+'</td><td>'+(x.lastStarted?new Date(x.lastStarted).toLocaleString():'—')+'</td><td style="text-align:right"><button class="btn-stop" onclick="restart(\\''+x.room+'\\')">Start</button> <button class="btn-stop" onclick="backup(\\''+x.room+'\\')">Backup</button> <button class="btn-stop" onclick="privacy(\\''+x.room+'\\','+(!x.private)+')">'+(x.private?'Make public':'Make private')+'</button></td></tr>').join('')
       : '<tr><td class="empty" colspan="3">Servers you\\'ve run before will show here.</td></tr>';
     document.getElementById('log').textContent=s.log.join('\\n');
   }catch(e){}
@@ -199,6 +205,17 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
       let body = ''; for await (const c of req) body += c;
       try {
         await manager.restart(JSON.parse(body || '{}').room);
+        res.writeHead(200); return res.end('{}');
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/privacy') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const b = JSON.parse(body || '{}');
+        await manager.setPrivacy(b.room, b.private);
         res.writeHead(200); return res.end('{}');
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json' });

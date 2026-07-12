@@ -48,12 +48,15 @@ export function subscribeRoom(room, cb) {
   });
 }
 
-// Public bar: only servers that are actually live (online AND fresh). A timer
-// re-checks freshness so a host that stops/crashes drops off even without a new
-// snapshot.
+// Public bar: every public listing, live first. Offline servers stay visible
+// (grayed on the site) — they only vanish when the host app delists them (folder
+// deleted) or they're marked private. The timer re-checks freshness so a host
+// that stops/crashes flips to offline even without a new snapshot.
 export function subscribeRooms(cb) {
   let latest = [];
-  const emit = () => cb(latest.map(normalize).filter((r) => r.live));
+  const emit = () => cb(
+    latest.map(normalize).sort((a, b) => (b.live - a.live) || (b.lastSeen - a.lastSeen)),
+  );
   const unsub = watchPublicRooms(getDb(), (list) => { latest = list; emit(); });
   const timer = setInterval(emit, 15000);
   return () => { unsub(); clearInterval(timer); };

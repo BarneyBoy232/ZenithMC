@@ -44,7 +44,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#06070a] text-slate-100 font-sans selection:bg-emerald-500/30 antialiased">
+    <div className="min-h-screen bg-[#06070a] text-slate-100 font-sans selection:bg-purple-500/30 antialiased">
       {/* nav */}
       <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#06070a]/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
@@ -55,7 +55,7 @@ export default function App() {
           {user ? (
             <div className="flex items-center gap-2">
               {user.email === ADMIN_EMAIL && (
-                <a href="/admin" className="flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 transition-colors">
+                <a href="/admin" className="flex items-center gap-1.5 text-sm font-medium text-purple-400 hover:text-purple-300 px-3 py-1.5 rounded-full border border-purple-500/25 bg-purple-500/10 transition-colors">
                   <Gauge size={15} /> Admin
                 </a>
               )}
@@ -67,7 +67,7 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <button onClick={signIn} className="flex items-center gap-2 text-sm font-medium text-slate-200 hover:text-white px-4 py-1.5 rounded-full border border-white/10 hover:border-emerald-500/40 hover:bg-white/5 transition-colors">
+            <button onClick={signIn} className="flex items-center gap-2 text-sm font-medium text-slate-200 hover:text-white px-4 py-1.5 rounded-full border border-white/10 hover:border-purple-500/40 hover:bg-white/5 transition-colors">
               <LogIn size={15} /> Sign in
             </button>
           )}
@@ -76,7 +76,7 @@ export default function App() {
 
       {/* hero */}
       <header className="relative overflow-hidden">
-        <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[820px] h-[820px] rounded-full bg-emerald-500/10 blur-[120px]" />
+        <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[820px] h-[820px] rounded-full bg-purple-600/10 blur-[120px]" />
         <div className="relative max-w-4xl mx-auto px-5 pt-24 pb-20 text-center">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-slate-300 mb-8">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -84,7 +84,7 @@ export default function App() {
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.05] mb-6">
             Your PC is the <br />
-            <span className="bg-linear-to-br from-emerald-300 via-emerald-400 to-teal-500 bg-clip-text text-transparent">Minecraft server.</span>
+            <span className="bg-linear-to-br from-purple-300 via-purple-400 to-violet-500 bg-clip-text text-transparent">Minecraft server.</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             Run a server on your own machine and share it with a link. Friends connect
@@ -95,31 +95,31 @@ export default function App() {
               <Server size={20} /> Download Host
               <ArrowRight size={18} className="opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all" />
             </a>
-            <a href="https://github.com/BarneyBoy232/ZenithMC/releases/latest/download/ZenithMC-Connector-Setup.exe" className="inline-flex items-center gap-2 border border-white/10 hover:border-emerald-500/40 hover:bg-white/5 text-slate-300 hover:text-white font-medium px-6 py-4 rounded-2xl transition-colors">
+            <a href="https://github.com/BarneyBoy232/ZenithMC/releases/latest/download/ZenithMC-Connector-Setup.exe" className="inline-flex items-center gap-2 border border-white/10 hover:border-purple-500/40 hover:bg-white/5 text-slate-300 hover:text-white font-medium px-6 py-4 rounded-2xl transition-colors">
               <Download size={18} /> Download Connector
             </a>
           </div>
           <p className="mt-4 text-xs text-slate-600 max-w-md mx-auto">Host = run a server on your PC. Connector = the small helper friends install once to join. Windows.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-sm text-slate-500">
-            <span className="inline-flex items-center gap-1.5"><Gauge size={15} className="text-emerald-400/80" /> ~direct latency</span>
-            <span className="inline-flex items-center gap-1.5"><InfinityIcon size={15} className="text-emerald-400/80" /> unlimited servers</span>
-            <span className="inline-flex items-center gap-1.5"><Wifi size={15} className="text-emerald-400/80" /> no port forwarding</span>
+            <span className="inline-flex items-center gap-1.5"><Gauge size={15} className="text-purple-400/80" /> ~direct latency</span>
+            <span className="inline-flex items-center gap-1.5"><InfinityIcon size={15} className="text-purple-400/80" /> unlimited servers</span>
+            <span className="inline-flex items-center gap-1.5"><Wifi size={15} className="text-purple-400/80" /> no port forwarding</span>
           </div>
         </div>
       </header>
 
       {/* how it works */}
       <section className="max-w-5xl mx-auto px-5 py-16">
-        <h2 className="text-center text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400/80 mb-12">How it works</h2>
+        <h2 className="text-center text-sm font-semibold uppercase tracking-[0.2em] text-purple-400/80 mb-12">How it works</h2>
         <div className="grid md:grid-cols-3 gap-5">
           {[
             { n: '1', icon: <Server size={22} />, title: 'Host', desc: 'Open the app, name your server, hit start. Your PC runs it.' },
             { n: '2', icon: <Globe size={22} />, title: 'Share', desc: 'Send friends your link — mc.zenithurl.com/yourname.' },
             { n: '3', icon: <Users size={22} />, title: 'Play', desc: 'They click connect and join. Traffic goes straight PC to PC.' },
           ].map((s) => (
-            <div key={s.n} className="relative bg-white/[0.03] border border-white/10 rounded-3xl p-7 hover:border-emerald-500/30 transition-colors">
+            <div key={s.n} className="relative bg-white/[0.03] border border-white/10 rounded-3xl p-7 hover:border-purple-500/30 transition-colors">
               <span className="absolute top-6 right-7 text-5xl font-black text-white/5">{s.n}</span>
-              <div className="w-11 h-11 grid place-items-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-5">{s.icon}</div>
+              <div className="w-11 h-11 grid place-items-center rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 mb-5">{s.icon}</div>
               <h3 className="font-bold text-lg mb-1.5">{s.title}</h3>
               <p className="text-sm text-slate-400 leading-relaxed">{s.desc}</p>
             </div>
@@ -136,7 +136,7 @@ export default function App() {
           { icon: <Gauge size={20} />, title: 'Low latency', desc: 'A direct path means near-LAN ping for nearby players.' },
         ].map((f) => (
           <div key={f.title} className="bg-white/[0.03] border border-white/10 rounded-2xl p-6">
-            <div className="text-emerald-400 mb-3">{f.icon}</div>
+            <div className="text-purple-400 mb-3">{f.icon}</div>
             <h3 className="font-bold mb-1">{f.title}</h3>
             <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
           </div>
@@ -164,17 +164,21 @@ export default function App() {
               return (
                 <div key={s.room} className={`px-6 py-5 flex items-center justify-between hover:bg-white/[0.03] transition-colors ${i !== servers.length - 1 ? 'border-b border-white/5' : ''}`}>
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"><Server size={20} /></div>
+                    <div className={`w-11 h-11 shrink-0 grid place-items-center rounded-2xl border ${s.live ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-600'}`}>
+                      {s.live ? <Server size={20} /> : <ServerOff size={20} />}
+                    </div>
                     <div className="min-w-0">
-                      <div className="font-semibold truncate">{url}</div>
-                      <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5"><Users size={12} /> {s.playerCount} online</div>
+                      <div className={`font-semibold truncate ${s.live ? '' : 'text-slate-400'}`}>{url}</div>
+                      <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        {s.live ? <><Users size={12} /> {s.playerCount} online</> : 'offline'}
+                      </div>
                     </div>
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
-                    <button onClick={() => copy(url)} title="Copy link" aria-label="Copy link" className="grid place-items-center w-9 h-9 bg-white/5 border border-white/10 rounded-xl hover:text-emerald-400 hover:border-emerald-500/30 transition-colors">
+                    <button onClick={() => copy(url)} title="Copy link" aria-label="Copy link" className="grid place-items-center w-9 h-9 bg-white/5 border border-white/10 rounded-xl hover:text-purple-400 hover:border-purple-500/30 transition-colors">
                       {copied === url ? <CheckCircle size={15} /> : <Copy size={15} />}
                     </button>
-                    <a href={`https://${url}`} className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-medium hover:text-emerald-400 hover:border-emerald-500/30 transition-colors">
+                    <a href={`https://${url}`} className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-medium hover:text-purple-400 hover:border-purple-500/30 transition-colors">
                       Open <ArrowRight size={15} />
                     </a>
                   </div>
@@ -187,7 +191,7 @@ export default function App() {
 
       <footer className="border-t border-white/5 py-10 text-center">
         <div className="text-slate-600 text-xs uppercase tracking-[0.2em] inline-flex items-center gap-2">
-          <Zap size={12} className="text-emerald-500" /> ZenithMC · direct peer-to-peer hosting
+          <Zap size={12} className="text-purple-500" /> ZenithMC · direct peer-to-peer hosting
         </div>
       </footer>
     </div>

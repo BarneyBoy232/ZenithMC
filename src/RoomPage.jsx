@@ -69,7 +69,7 @@ export default function RoomPage({ room }) {
   const online = state.data?.online;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-emerald-500/30">
+    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-purple-500/30">
       <nav className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
@@ -126,7 +126,7 @@ export default function RoomPage({ room }) {
                   </a>
                   <p className="text-slate-600 text-xs mt-3">
                     Already installed?{' '}
-                    <button onClick={() => connectorStatus().then(setHasConnector)} className="underline hover:text-emerald-400">
+                    <button onClick={() => connectorStatus().then(setHasConnector)} className="underline hover:text-purple-400">
                       Re-check
                     </button>
                   </p>
@@ -157,7 +157,7 @@ export default function RoomPage({ room }) {
                 <code className="flex-1 font-mono text-emerald-400 text-lg">{pasteAddr}</code>
                 <button
                   onClick={() => copy(pasteAddr)}
-                  className="flex items-center gap-2 px-5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-bold hover:text-emerald-400 transition-colors"
+                  className="flex items-center gap-2 px-5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-bold hover:text-purple-400 transition-colors"
                 >
                   {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
                   {copied ? 'Copied' : 'Copy'}
@@ -185,7 +185,7 @@ function Step({ n, title, children }) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 mb-6">
       <div className="flex items-center gap-3 mb-4">
-        <span className="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 font-bold flex items-center justify-center">{n}</span>
+        <span className="w-8 h-8 rounded-full bg-purple-500 text-white font-bold flex items-center justify-center">{n}</span>
         <h3 className="font-bold text-lg">{title}</h3>
       </div>
       {children}

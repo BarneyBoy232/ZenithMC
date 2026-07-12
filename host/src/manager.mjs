@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { HostController } from './controller.mjs';
+import { getDb, authReady, updateRoom } from '../../shared/firestoreSignaling.mjs';
 
 let ROOT;
 try { ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'); } catch { ROOT = process.cwd(); }
@@ -50,6 +51,49 @@ export class ServerManager extends EventEmitter {
       const arr = JSON.parse(await readFile(this.#knownPath(), 'utf8'));
       for (const k of arr) if (k?.room) this.known.set(k.room, k);
     } catch { /* first run — nothing saved yet */ }
+    // Watch for deleted folders: their site listing should disappear.
+    this.sweepMissing();
+    if (!this._sweepTimer) {
+      this._sweepTimer = setInterval(() => this.sweepMissing(), 10 * 60 * 1000);
+      this._sweepTimer.unref?.();
+    }
+  }
+
+  /**
+   * A remembered server whose folder no longer exists (deleted/moved) is gone for
+   * good — delist it from the site and forget it locally. Local forget happens
+   * only after the delist write succeeds, so a temporary network failure just
+   * retries on the next sweep instead of leaving a ghost listing forever.
+   */
+  async sweepMissing() {
+    for (const k of [...this.known.values()]) {
+      if (this.servers.has(k.room)) continue; // running — clearly still exists
+      const dir = k.dir || join(this.baseDir, 'servers', k.room);
+      const missing = await access(dir).then(() => false, () => true);
+      if (!missing) continue;
+      try {
+        const db = getDb();
+        await authReady();
+        await updateRoom(db, k.room, { online: false, delisted: true });
+        this.known.delete(k.room);
+        await this.#saveKnown();
+        this.#push(k.room, `Folder gone (${dir}) — removed from the site listing.`);
+        this.emit('change');
+      } catch { /* offline — retry next sweep */ }
+    }
+  }
+
+  /** Show or hide a remembered server on the public list. */
+  async setPrivacy(room, makePrivate) {
+    room = String(room || '').toLowerCase().trim();
+    const k = this.known.get(room);
+    if (!k) throw new Error('Unknown server — start it once first.');
+    const db = getDb();
+    await authReady();
+    await updateRoom(db, room, { private: !!makePrivate });
+    k.private = !!makePrivate;
+    await this.#saveKnown();
+    this.#push(room, makePrivate ? 'Hidden from the public list.' : 'Visible on the public list.');
   }
 
   async #saveKnown() {
@@ -76,7 +120,7 @@ export class ServerManager extends EventEmitter {
     return [...this.known.values()]
       .filter((k) => !this.servers.has(k.room))
       .sort((a, b) => (b.lastStarted || 0) - (a.lastStarted || 0))
-      .map((k) => ({ room: k.room, lastStarted: k.lastStarted || null }));
+      .map((k) => ({ room: k.room, lastStarted: k.lastStarted || null, private: !!k.private }));
   }
 
   state() { return { servers: this.list(), previous: this.previous(), log: this.log }; }

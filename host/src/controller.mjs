@@ -61,7 +61,8 @@ export class HostController extends EventEmitter {
     mc.on('ready', async () => {
       this.running = true;
       this.p2p = startHostP2P({ room, targetPort: port });
-      await publishRoom(db, room, { motd: mc.motd, version: mc.version, playerCount: 0, private: !!isPrivate });
+      // delisted:false revives the listing if the folder was deleted and later restored.
+      await publishRoom(db, room, { motd: mc.motd, version: mc.version, playerCount: 0, private: !!isPrivate, delisted: false });
       this.#push(`Room live: mc.zenithurl.com/${room} (${isPrivate ? 'private' : 'public'})`);
       // Heartbeat so the room stays "fresh"; a crashed/old instance goes stale and
       // its name can be reclaimed.
