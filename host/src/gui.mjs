@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-07-12.1';
+const BUILD = '2026-07-12.2';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -85,12 +85,9 @@ const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>Zeni
   <div class="err" id="err"></div>
 </div>
 
-<h2>Running servers</h2>
-<div class="card"><table><thead><tr><th>Name</th><th>Port</th><th>Players</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
-
-<h2>Previous servers</h2>
+<h2>Servers</h2>
 <div class="card">
-  <table><thead><tr><th>Name</th><th>Last started</th><th></th></tr></thead><tbody id="prev"></tbody></table>
+  <table><thead><tr><th>Name</th><th>Status</th><th></th></tr></thead><tbody id="rows"></tbody></table>
   <div class="hint" id="msg"></div>
 </div>
 
@@ -154,12 +151,17 @@ async function backup(room){
 async function tick(){
   try{
     const s=await (await fetch('/api/status')).json();
-    document.getElementById('rows').innerHTML = s.servers.length
-      ? s.servers.map(x=>'<tr><td class="mono">'+x.room+'</td><td>'+x.port+'</td><td>'+(x.running?x.players:'starting…')+'</td><td style="text-align:right"><button class="btn-stop" onclick="stop(\\''+x.room+'\\')">Stop</button></td></tr>').join('')
-      : '<tr><td class="empty" colspan="4">No servers running.</td></tr>';
-    document.getElementById('prev').innerHTML = (s.previous&&s.previous.length)
-      ? s.previous.map(x=>'<tr><td class="mono">'+x.room+(x.private?' <span style="color:#64748b;font-size:11px">(private)</span>':'')+'</td><td>'+(x.lastStarted?new Date(x.lastStarted).toLocaleString():'—')+'</td><td style="text-align:right"><button class="btn-stop" onclick="restart(\\''+x.room+'\\')">Start</button> <button class="btn-stop" onclick="backup(\\''+x.room+'\\')">Backup</button> <button class="btn-stop" onclick="privacy(\\''+x.room+'\\','+(!x.private)+')">'+(x.private?'Make public':'Make private')+'</button></td></tr>').join('')
-      : '<tr><td class="empty" colspan="3">Servers you\\'ve run before will show here.</td></tr>';
+    const rows=[];
+    for(const x of s.servers){
+      const status = x.running ? ('<span style="color:#34d399">● Online</span> · :'+x.port+' · '+x.players+' player'+(x.players===1?'':'s')) : '<span style="color:#94a3b8">Starting…</span>';
+      rows.push('<tr><td class="mono">'+x.room+'</td><td>'+status+'</td><td style="text-align:right"><button class="btn-stop" onclick="stop(\\''+x.room+'\\')">Stop</button></td></tr>');
+    }
+    for(const x of (s.previous||[])){
+      const last = x.lastStarted ? ' · last run '+new Date(x.lastStarted).toLocaleString() : '';
+      const name = x.room + (x.private?' <span style="color:#64748b;font-size:11px">(private)</span>':'');
+      rows.push('<tr><td class="mono">'+name+'</td><td style="color:#94a3b8">Stopped'+last+'</td><td style="text-align:right"><button class="btn-stop" onclick="restart(\\''+x.room+'\\')">Start</button> <button class="btn-stop" onclick="backup(\\''+x.room+'\\')">Backup</button> <button class="btn-stop" onclick="privacy(\\''+x.room+'\\','+(!x.private)+')">'+(x.private?'Make public':'Make private')+'</button></td></tr>');
+    }
+    document.getElementById('rows').innerHTML = rows.length ? rows.join('') : '<tr><td class="empty" colspan="3">No servers yet — create one above.</td></tr>';
     document.getElementById('log').textContent=s.log.join('\\n');
   }catch(e){}
 }
