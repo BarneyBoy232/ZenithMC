@@ -6,7 +6,7 @@
 
 import { initializeApp, getApps } from 'firebase/app';
 import {
-  getFirestore, initializeFirestore, doc, setDoc, onSnapshot, collection, query, where,
+  getFirestore, initializeFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query, where,
   addDoc, arrayUnion, serverTimestamp,
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
@@ -66,6 +66,10 @@ export function watchRoom(db, room, cb) {
 export function watchPublicRooms(db, cb) {
   const q = query(collection(db, SUBPROJECT), where('kind', '==', 'room'));
   return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data()).filter((r) => !r.private && !r.delisted)));
+}
+// Admin: permanently remove a room listing (for dead/ghost servers).
+export function deleteRoom(db, room) {
+  return deleteDoc(doc(db, SUBPROJECT, `room_${room}`));
 }
 // Admin views: every room (online or not) and every recorded session.
 export function watchAllRooms(db, cb) {

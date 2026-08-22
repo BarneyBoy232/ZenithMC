@@ -4,7 +4,7 @@
 //
 // Bundled by build/bundle.mjs (esbuild) so shared/ imports are inlined.
 
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, shell } from 'electron';
 import { join } from 'node:path';
 import { startGuiServer } from './src/gui.mjs';
 
@@ -21,11 +21,17 @@ async function pickDirectory() {
   return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
 }
 
+// Open a folder in Windows Explorer (server folder / backups folder).
+async function openPath(p) {
+  const err = await shell.openPath(String(p || ''));
+  return !err; // shell.openPath returns '' on success, an error string otherwise
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.whenReady().then(() => {
-    panel = startGuiServer({ port: PORT, baseDir: app.getPath('userData'), pickDirectory });
+    panel = startGuiServer({ port: PORT, baseDir: app.getPath('userData'), pickDirectory, openPath });
     win = new BrowserWindow({
       width: 920,
       height: 700,

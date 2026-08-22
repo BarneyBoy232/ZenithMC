@@ -8,7 +8,7 @@
 
 import net from 'node:net';
 import { spawn } from 'node:child_process';
-import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, access, readdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -181,6 +181,40 @@ export class ServerManager extends EventEmitter {
   #dirFor(room) {
     const k = this.known.get(room);
     return (k && k.dir) || join(this.baseDir, 'servers', room);
+  }
+
+  /** Backup .zip files for one server, newest first. */
+  async backupsFor(room) {
+    const backups = join(this.baseDir, 'backups');
+    try {
+      const files = await readdir(backups);
+      const mine = files.filter((f) => f.startsWith(room + '-') && f.endsWith('.zip'));
+      const out = [];
+      for (const f of mine) {
+        const st = await stat(join(backups, f)).catch(() => null);
+        out.push({ name: f, size: st ? st.size : 0 });
+      }
+      return out.sort((a, b) => b.name.localeCompare(a.name));
+    } catch { return []; }
+  }
+
+  /** Everything the GUI's per-server detail panel shows. */
+  async serverDetail(room) {
+    room = String(room || '').toLowerCase().trim();
+    const running = this.servers.get(room);
+    const k = this.known.get(room);
+    if (!running && !k) throw new Error('Unknown server.');
+    return {
+      room,
+      running: !!running,
+      port: running ? running.port : null,
+      players: running ? running.ctrl.players : 0,
+      private: !!(k && k.private),
+      dir: this.#dirFor(room),
+      backupsDir: join(this.baseDir, 'backups'),
+      joinUrl: `mc.zenithurl.com/${room}`,
+      backups: await this.backupsFor(room),
+    };
   }
 
   /**

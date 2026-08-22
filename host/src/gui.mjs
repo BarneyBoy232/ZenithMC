@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-07-12.2';
+const BUILD = '2026-07-12.3';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -39,8 +39,8 @@ const STYLE = `<style>
   .hint{color:#64748b;font-size:12px;margin-top:5px}
   .chk{display:flex;align-items:center;gap:8px;margin-top:14px;color:#cbd5e1;font-size:14px}
   .chk input{width:auto}
-  .btn{margin-top:16px;padding:10px 18px;border-radius:12px;border:0;background:#10b981;color:#06070a;font-weight:700;font-size:14px;cursor:pointer}
-  .btn:hover{background:#34d399}
+  .btn{margin-top:16px;padding:10px 18px;border-radius:12px;border:0;background:#7c3aed;color:#fff;font-weight:700;font-size:14px;cursor:pointer}
+  .btn:hover{background:#8b5cf6}
   .btn-stop{padding:6px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#e2e8f0;font-size:13px;cursor:pointer}
   .err{color:#f87171;font-size:13px;margin-top:10px;min-height:16px}
   h2{font-size:14px;font-weight:600;color:#94a3b8;letter-spacing:.04em;text-transform:uppercase;margin:26px 0 10px}
@@ -91,7 +91,9 @@ const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>Zeni
   <div class="hint" id="msg"></div>
 </div>
 
-<h2>Console</h2>
+<div id="detail" class="card hide" style="margin-top:14px"></div>
+
+<h2>All activity</h2>
 <pre id="log"></pre>
 
 <script>
@@ -129,46 +131,93 @@ async function loadVersions(){
     }
   }catch(e){}
 }
-async function stop(room){ await fetch('/api/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})}); }
+async function stop(room){ await fetch('/api/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})}); if(selRoom===room) setTimeout(()=>openServer(room),800); }
 async function restart(room){
   document.getElementById('msg').textContent='Starting '+room+'…';
   const r = await fetch('/api/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
   if(!r.ok){ const e=await r.json().catch(()=>({})); document.getElementById('msg').textContent=e.error||'Failed to start.'; }
   else document.getElementById('msg').textContent='';
+  if(selRoom===room) setTimeout(()=>openServer(room),800);
 }
 async function privacy(room, makePrivate){
   const r = await fetch('/api/privacy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,private:makePrivate})});
   if(!r.ok){ const e=await r.json().catch(()=>({})); document.getElementById('msg').textContent=e.error||'Failed to update privacy.'; }
   else document.getElementById('msg').textContent='';
-  tick();
+  if(selRoom===room) openServer(room);
 }
 async function backup(room){
   document.getElementById('msg').textContent='Backing up '+room+'… (can take a minute on big worlds)';
   const r = await fetch('/api/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
   const j = await r.json().catch(()=>({}));
   document.getElementById('msg').textContent = r.ok ? 'Backup saved: '+j.path : (j.error||'Backup failed.');
+  if(selRoom===room) openServer(room); // refresh backups list
+}
+
+// ---- per-server detail panel ----
+let selRoom=null, selDetail=null, lastLog=[];
+async function openServer(room){
+  selRoom=room;
+  try{ selDetail=await (await fetch('/api/server?room='+encodeURIComponent(room))).json(); }
+  catch(e){ return; }
+  renderDetail();
+}
+function closeDetail(){ selRoom=null; selDetail=null; document.getElementById('detail').classList.add('hide'); }
+function copyJoin(){ if(selDetail&&navigator.clipboard) navigator.clipboard.writeText(selDetail.joinUrl); }
+function openDir(){ if(selDetail) fetch('/api/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:selDetail.dir})}); }
+function openBackups(){ if(selDetail) fetch('/api/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:selDetail.backupsDir})}); }
+function renderDetail(){
+  const d=selDetail; if(!d) return;
+  const el=document.getElementById('detail'); el.classList.remove('hide');
+  const status = d.running ? '<span style="color:#34d399">● Online</span> · '+d.players+' player'+(d.players===1?'':'s') : '<span style="color:#94a3b8">Stopped</span>';
+  const backups = (d.backups&&d.backups.length)
+    ? d.backups.map(b=>'<div class="mono" style="font-size:12px;color:#94a3b8">'+b.name+' · '+(b.size/1048576).toFixed(1)+' MB</div>').join('')
+    : '<div class="hint">No backups yet.</div>';
+  const startStop = d.running
+    ? '<button class="btn-stop" onclick="stop(\\''+d.room+'\\')">Stop</button>'
+    : '<button class="btn-stop" onclick="restart(\\''+d.room+'\\')">Start</button>';
+  el.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-weight:700;font-size:16px">'+d.room+(d.private?' <span style="color:#64748b;font-size:11px">(private)</span>':'')+'</div><button class="btn-alt" onclick="closeDetail()">Close</button></div>'
+    +'<div style="font-size:13px;margin-bottom:4px">'+status+'</div>'
+    +'<label>Join link (share this)</label><div class="row"><input readonly value="'+d.joinUrl+'"><button class="btn-alt" onclick="copyJoin()">Copy</button></div>'
+    +'<label>Stored location</label><div class="row"><input readonly value="'+d.dir+'"><button class="btn-alt" onclick="openDir()">Open</button></div>'
+    +'<label>Backups</label>'+backups
+    +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+startStop
+    +'<button class="btn-stop" onclick="backup(\\''+d.room+'\\')">Back up now</button>'
+    +'<button class="btn-stop" onclick="openBackups()">Open backups folder</button>'
+    +'<button class="btn-stop" onclick="privacy(\\''+d.room+'\\','+(!d.private)+')">'+(d.private?'Make public':'Make private')+'</button></div>'
+    +'<label>Console</label><pre id="detail-log" style="height:200px"></pre>';
+  updateDetailLog();
+}
+function updateDetailLog(){
+  if(!selRoom) return;
+  const pre=document.getElementById('detail-log'); if(!pre) return;
+  const atBottom = pre.scrollTop+pre.clientHeight >= pre.scrollHeight-4;
+  pre.textContent=(lastLog||[]).filter(l=>l.indexOf('['+selRoom+'] ')===0).join('\\n');
+  if(atBottom) pre.scrollTop=pre.scrollHeight;
 }
 async function tick(){
   try{
     const s=await (await fetch('/api/status')).json();
+    lastLog=s.log;
     const rows=[];
     for(const x of s.servers){
-      const status = x.running ? ('<span style="color:#34d399">● Online</span> · :'+x.port+' · '+x.players+' player'+(x.players===1?'':'s')) : '<span style="color:#94a3b8">Starting…</span>';
-      rows.push('<tr><td class="mono">'+x.room+'</td><td>'+status+'</td><td style="text-align:right"><button class="btn-stop" onclick="stop(\\''+x.room+'\\')">Stop</button></td></tr>');
+      const status = x.running ? ('<span style="color:#34d399">● Online</span> · '+x.players+' player'+(x.players===1?'':'s')) : '<span style="color:#94a3b8">Starting…</span>';
+      rows.push('<tr><td class="mono">'+x.room+'</td><td>'+status+'</td><td style="text-align:right"><button class="btn-stop" onclick="openServer(\\''+x.room+'\\')">Open</button> <button class="btn-stop" onclick="stop(\\''+x.room+'\\')">Stop</button></td></tr>');
     }
     for(const x of (s.previous||[])){
       const last = x.lastStarted ? ' · last run '+new Date(x.lastStarted).toLocaleString() : '';
       const name = x.room + (x.private?' <span style="color:#64748b;font-size:11px">(private)</span>':'');
-      rows.push('<tr><td class="mono">'+name+'</td><td style="color:#94a3b8">Stopped'+last+'</td><td style="text-align:right"><button class="btn-stop" onclick="restart(\\''+x.room+'\\')">Start</button> <button class="btn-stop" onclick="backup(\\''+x.room+'\\')">Backup</button> <button class="btn-stop" onclick="privacy(\\''+x.room+'\\','+(!x.private)+')">'+(x.private?'Make public':'Make private')+'</button></td></tr>');
+      rows.push('<tr><td class="mono">'+name+'</td><td style="color:#94a3b8">Stopped'+last+'</td><td style="text-align:right"><button class="btn-stop" onclick="openServer(\\''+x.room+'\\')">Open</button> <button class="btn-stop" onclick="restart(\\''+x.room+'\\')">Start</button></td></tr>');
     }
     document.getElementById('rows').innerHTML = rows.length ? rows.join('') : '<tr><td class="empty" colspan="3">No servers yet — create one above.</td></tr>';
     document.getElementById('log').textContent=s.log.join('\\n');
+    updateDetailLog();
   }catch(e){}
 }
 setInterval(tick,1000); tick(); loadVersions();
 </script></body></html>`;
 
-export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800), baseDir, pickDirectory } = {}) {
+export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800), baseDir, pickDirectory, openPath } = {}) {
   if (baseDir) manager.baseDir = baseDir;
   manager.loadKnown(); // restore the remembered-servers list (async, non-blocking)
   const server = http.createServer(async (req, res) => {
@@ -191,6 +240,23 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
       try { dir = pickDirectory ? await pickDirectory() : null; } catch { dir = null; }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ dir }));
+    }
+    if (req.method === 'GET' && url.pathname === '/api/server') {
+      try {
+        const detail = await manager.serverDetail(url.searchParams.get('room') || '');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(detail));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/open') {
+      let body = ''; for await (const c of req) body += c;
+      let ok = false;
+      try { ok = openPath ? await openPath(JSON.parse(body || '{}').path) : false; } catch { ok = false; }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok }));
     }
     if (req.method === 'POST' && url.pathname === '/api/start') {
       let body = ''; for await (const c of req) body += c;

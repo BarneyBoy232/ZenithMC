@@ -91,7 +91,7 @@ export default function App() {
             <span className="text-slate-200"> straight to you</span> — no relay, no data cap, no setup.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a href="https://github.com/BarneyBoy232/ZenithMC/releases/latest/download/ZenithMC-Host-Setup.exe" className="group inline-flex items-center gap-2.5 bg-emerald-500 hover:bg-emerald-400 text-[#06070a] font-bold text-base px-8 py-4 rounded-2xl transition-all hover:scale-[1.03] shadow-[0_0_60px_-12px_#10b981]">
+            <a href="https://github.com/BarneyBoy232/ZenithMC/releases/latest/download/ZenithMC-Host-Setup.exe" className="group inline-flex items-center gap-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-base px-8 py-4 rounded-2xl transition-all hover:scale-[1.03] shadow-[0_0_60px_-12px_#7c3aed]">
               <Server size={20} /> Download Host
               <ArrowRight size={18} className="opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all" />
             </a>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Server, ServerOff, Users, Lock, RefreshCw } from 'lucide-react';
-import { subscribeAllRooms, subscribeSessions } from './lib/registry.js';
+import { Globe, Server, ServerOff, Users, Lock, RefreshCw, Trash2 } from 'lucide-react';
+import { subscribeAllRooms, subscribeSessions, removeRoom } from './lib/registry.js';
 import { gate, ADMIN_EMAIL } from './lib/auth.js';
 
 function fmtMins(ms) {
@@ -36,6 +36,11 @@ export default function AdminPage() {
     }
   };
 
+  const remove = async (room) => {
+    if (!window.confirm(`Remove "${room}" from the list? This permanently deletes its listing.`)) return;
+    try { await removeRoom(room); } catch (e) { window.alert(`Could not remove: ${e.message || e}`); }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans">
       <nav className="border-b border-slate-800 px-4 h-16 flex items-center gap-2 font-bold text-xl">
@@ -45,9 +50,9 @@ export default function AdminPage() {
       <main className="max-w-5xl mx-auto px-4 py-12">
         {!user ? (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center">
-            <Lock className="mx-auto mb-4 text-emerald-500" size={32} />
+            <Lock className="mx-auto mb-4 text-purple-400" size={32} />
             <p className="text-slate-400 mb-6">Sign in to view the live network.</p>
-            <button onClick={signIn} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-8 py-3 rounded-xl">
+            <button onClick={signIn} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-3 rounded-xl">
               Sign in with Google
             </button>
             {error && <p className="text-red-400/80 text-sm mt-4">{error}</p>}
@@ -65,19 +70,22 @@ export default function AdminPage() {
               <Stat label="Total sessions" value={sessions.length} />
             </div>
 
-            <h2 className="text-lg font-medium mb-3 flex items-center gap-2"><Server size={18} className="text-emerald-500" /> Servers</h2>
+            <h2 className="text-lg font-medium mb-3 flex items-center gap-2"><Server size={18} className="text-purple-400" /> Servers</h2>
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden mb-10">
               {rooms.length === 0 ? <Empty text="No servers yet." /> : rooms.map((r, i) => (
                 <Row key={r.room} last={i === rooms.length - 1}>
                   <span className="font-mono">{r.room}</span>
                   <span className={r.live ? 'text-emerald-400' : 'text-slate-500'}>{r.live ? 'live' : 'offline'}</span>
                   <span className="flex items-center gap-1 text-slate-300"><Users size={14} />{r.playerCount || 0}</span>
-                  <span className="text-slate-500">{r.version || '—'}</span>
+                  <span className="flex items-center justify-between gap-2 text-slate-500">
+                    {r.version || '—'}
+                    <button onClick={() => remove(r.room)} title="Remove listing" className="text-red-400/60 hover:text-red-400 transition-colors"><Trash2 size={15} /></button>
+                  </span>
                 </Row>
               ))}
             </div>
 
-            <h2 className="text-lg font-medium mb-3 flex items-center gap-2"><RefreshCw size={18} className="text-emerald-500" /> Recent sessions</h2>
+            <h2 className="text-lg font-medium mb-3 flex items-center gap-2"><RefreshCw size={18} className="text-purple-400" /> Recent sessions</h2>
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
               {sessions.length === 0 ? <Empty text="No sessions yet." /> : sessions.slice(0, 50).map((s, i) => (
                 <Row key={i} last={i === Math.min(sessions.length, 50) - 1}>
@@ -98,7 +106,7 @@ export default function AdminPage() {
 function Stat({ label, value }) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-      <div className="text-3xl font-bold text-emerald-400">{value}</div>
+      <div className="text-3xl font-bold text-purple-400">{value}</div>
       <div className="text-xs uppercase tracking-widest text-slate-500 mt-1">{label}</div>
     </div>
   );

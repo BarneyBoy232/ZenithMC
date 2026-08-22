@@ -121,7 +121,7 @@ export default function RoomPage({ room }) {
                     You'll need the ZenithMC connector — a tiny helper, downloaded once. Run it once
                     and it stays ready in the background; you'll never touch it again.
                   </p>
-                  <a href="https://github.com/BarneyBoy232/ZenithMC/releases/latest/download/ZenithMC-Connector-Setup.exe" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition-all hover:scale-105">
+                  <a href="https://github.com/BarneyBoy232/ZenithMC/releases/latest/download/ZenithMC-Connector-Setup.exe" className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3 rounded-xl transition-all hover:scale-105">
                     <Download size={20} /> Download Connector
                   </a>
                   <p className="text-slate-600 text-xs mt-3">
@@ -139,9 +139,9 @@ export default function RoomPage({ room }) {
                   <button
                     onClick={connect}
                     disabled={connecting}
-                    className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition-all hover:scale-105 disabled:opacity-70"
+                    className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3 rounded-xl transition-all hover:scale-105 disabled:opacity-70"
                   >
-                    {connecting ? <div className="h-5 w-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" /> : <Zap size={20} />}
+                    {connecting ? <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Zap size={20} />}
                     {connecting ? 'Connecting…' : 'Connect'}
                   </button>
                   {connectError && <p className="text-red-400/80 text-sm mt-3">Couldn't connect directly: {connectError}</p>}
