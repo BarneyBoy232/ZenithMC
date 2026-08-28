@@ -163,6 +163,25 @@ export class MinecraftServer extends EventEmitter {
     this.proc = null;
     this.players = new Set();
     this.ready = false;
+    this._stopping = false;       // a stop has been requested
+    this._stoppedEmitted = false; // guard so 'stopped' fires at most once
+    this._killOnSpawn = false;    // stop requested before the process existed
+    this._killTimer = null;       // graceful-stop -> force-kill fallback
+  }
+
+  // Emit 'stopped' at most once (proc exit and a proc-null stop can both reach here).
+  #emitStopped(code) {
+    if (this._stoppedEmitted) return;
+    this._stoppedEmitted = true;
+    clearTimeout(this._killTimer);
+    this.ready = false;
+    this.emit('stopped', code);
+  }
+
+  // Force the process down (SIGTERM now, SIGKILL shortly after if it clings on).
+  #forceKill() {
+    try { this.proc?.kill(); } catch { /* already gone */ }
+    setTimeout(() => { try { this.proc?.kill('SIGKILL'); } catch { /* gone */ } }, 3000);
   }
 
   async #writeConfig() {
@@ -221,10 +240,10 @@ export class MinecraftServer extends EventEmitter {
 
     this.proc.stdout.on('data', (b) => this.#parse(b.toString()));
     this.proc.stderr.on('data', (b) => this.emit('log', b.toString()));
-    this.proc.on('exit', (code) => {
-      this.ready = false;
-      this.emit('stopped', code);
-    });
+    this.proc.on('exit', (code) => this.#emitStopped(code));
+
+    // Stop was clicked while we were still downloading Java/Paper — kill it now.
+    if (this._killOnSpawn) this.#forceKill();
 
     return this;
   }
@@ -257,6 +276,16 @@ export class MinecraftServer extends EventEmitter {
   }
 
   stop() {
-    this.send('stop');
+    if (this._stopping) { this.#forceKill(); return; } // second click = force it
+    this._stopping = true;
+    if (this.proc) {
+      this.send('stop'); // graceful: let Minecraft save the world…
+      this._killTimer = setTimeout(() => this.#forceKill(), 8000); // …but don't wait forever
+    } else {
+      // Still starting (downloading Java/Paper), no process yet: mark it to die on
+      // spawn and drop it from the UI now so Stop feels immediate.
+      this._killOnSpawn = true;
+      this.#emitStopped(0);
+    }
   }
 }

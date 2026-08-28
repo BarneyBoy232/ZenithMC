@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-07-12.4';
+const BUILD = '2026-07-12.5';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -131,7 +131,12 @@ async function loadVersions(){
     }
   }catch(e){}
 }
-async function stop(room){ await fetch('/api/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})}); if(selRoom===room) setTimeout(()=>openServer(room),800); }
+async function stop(room){
+  document.getElementById('msg').textContent='Stopping '+room+'… (saving the world)';
+  await fetch('/api/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
+  if(selRoom===room) setTimeout(()=>openServer(room),1200);
+  setTimeout(()=>{ const m=document.getElementById('msg'); if(m.textContent.indexOf('Stopping '+room)===0) m.textContent=''; },9000);
+}
 async function restart(room){
   document.getElementById('msg').textContent='Starting '+room+'…';
   const r = await fetch('/api/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
