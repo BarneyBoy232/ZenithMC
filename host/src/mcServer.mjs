@@ -17,25 +17,48 @@ import { EventEmitter } from 'node:events';
 
 const PAPER_API = 'https://fill.papermc.io/v3/projects/paper';
 const PAPER_UA = { 'User-Agent': 'ZenithMC/1.0 (+https://mc.zenithurl.com)' };
-const JRE_API = 'https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse';
+const jreApi = (major) => `https://api.adoptium.net/v3/binary/latest/${major}/ga/windows/x64/jre/hotspot/normal/eclipse`;
+
+// Major version of the system `java`, or 0 if absent/unparseable. Handles both
+// modern ("21.0.1" -> 21) and legacy ("1.8.0" -> 8) version strings.
+function systemJavaMajor() {
+  const r = spawnSync('java', ['-version'], { encoding: 'utf8' });
+  if (r.status !== 0) return 0;
+  const m = ((r.stderr || '') + (r.stdout || '')).match(/version "(\d+)(?:\.(\d+))?/);
+  if (!m) return 0;
+  const maj = Number(m[1]);
+  return maj === 1 ? Number(m[2] || 0) : maj;
+}
+
+/** Minimum Java major a given Minecraft version needs, per the Paper API (default 21). */
+export async function requiredJavaMajor(version) {
+  try {
+    const res = await fetch(`${PAPER_API}/versions/${version}`, { headers: PAPER_UA });
+    if (!res.ok) return 21;
+    const d = await res.json();
+    return d?.version?.java?.version?.minimum ?? d?.java?.version?.minimum ?? 21;
+  } catch { return 21; }
+}
 
 /**
- * Return a runnable `java` command. Uses the system Java if present; otherwise
- * downloads a portable Temurin JRE into `dir/jre` so end users install nothing.
+ * Return a runnable `java` command that satisfies `requiredMajor`. Uses the system
+ * Java if it's new enough; otherwise downloads a portable Temurin JRE of the right
+ * major into `dir/jre-<major>` so end users install nothing. Newer Minecraft (e.g.
+ * 26.x) needs Java 25, older (1.21.x) needs Java 21 — so the major is per-server.
  * (Windows target; on other platforms it falls back to system `java`.)
  */
-export async function ensureJava(dir) {
-  if (spawnSync('java', ['-version']).status === 0) return 'java';
+export async function ensureJava(dir, requiredMajor = 21) {
+  if (systemJavaMajor() >= requiredMajor) return 'java';
   if (process.platform !== 'win32') return 'java'; // packaged builds are Windows
 
-  const jreDir = join(dir, 'jre');
+  const jreDir = join(dir, `jre-${requiredMajor}`);
   const existing = await findJavaExe(jreDir);
   if (existing) return existing;
 
   await mkdir(jreDir, { recursive: true });
   const zip = join(jreDir, 'jre.zip');
-  const res = await fetch(JRE_API, { redirect: 'follow' });
-  if (!res.ok || !res.body) throw new Error(`JRE download failed (${res.status})`);
+  const res = await fetch(jreApi(requiredMajor), { redirect: 'follow' });
+  if (!res.ok || !res.body) throw new Error(`Java ${requiredMajor} download failed (${res.status})`);
   await new Promise((resolve, reject) => {
     Readable.fromWeb(res.body).pipe(createWriteStream(zip)).on('finish', resolve).on('error', reject);
   });
@@ -112,7 +135,9 @@ export async function listVersions() {
   if (!res.ok) throw new Error(`Paper versions lookup failed (${res.status})`);
   const data = await res.json();
   const ids = (data.versions || []).map((v) => v?.version?.id ?? v?.version ?? v).filter(Boolean);
-  const stable = ids.filter((id) => /^1\.\d+(\.\d+)?$/.test(id));
+  // Keep clean numeric releases (26.2, 26.1.2, 1.21.11 …), drop rc/pre/snapshots.
+  // The API lists newest first, so 26.x sits above 1.21.x.
+  const stable = ids.filter((id) => /^\d+(\.\d+)+$/.test(id));
   return stable.length ? stable : ids;
 }
 
@@ -165,7 +190,10 @@ export class MinecraftServer extends EventEmitter {
   }
 
   async start() {
-    const javaBin = await ensureJava(this.dir);
+    // New servers: download the Java the chosen Minecraft version needs (26.x -> 25,
+    // 1.21.x -> 21). Attached servers: default to 21 unless the system Java is newer.
+    const requiredMajor = this.attach ? 21 : await requiredJavaMajor(this.version).catch(() => 21);
+    const javaBin = await ensureJava(this.dir, requiredMajor);
 
     // Attaching an existing server: run its own jar, don't download Paper.
     // New server: download the requested Paper build.
