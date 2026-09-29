@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-07-12.5';
+const BUILD = '2026-09-29.1';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -24,37 +24,44 @@ const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.
 const STYLE = `<style>
   :root{color-scheme:dark}
   *{box-sizing:border-box}
-  body{background:#06070a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;max-width:760px;margin:0 auto;padding:28px 18px 48px;line-height:1.5}
-  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px;margin-bottom:2px}
-  .sub{color:#64748b;font-size:13px;margin:0 0 22px}
-  .card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px}
+  body{background:#0e1017;color:#e6eaf0;font-family:system-ui,-apple-system,sans-serif;max-width:780px;margin:0 auto;padding:0 18px 56px;line-height:1.55}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:22px 0 4px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:20px}
+  .sub{color:#7c899c;font-size:13px;margin:0 0 22px}
+  .card{background:#171b23;border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:20px}
   .tabs{display:flex;gap:8px;margin-bottom:14px}
-  .tab{padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#94a3b8;font-weight:600;font-size:14px;cursor:pointer}
-  .tab.active{background:rgba(124,58,237,.16);border-color:rgba(168,85,247,.45);color:#c084fc}
-  label{display:block;color:#94a3b8;font-size:13px;margin:12px 0 6px}
-  input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #1e293b;background:#0f172a;color:#e2e8f0;font-size:14px}
+  .tab{padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#9aa6b6;font-weight:600;font-size:14px;cursor:pointer}
+  .tab.active{background:rgba(139,92,246,.18);border-color:rgba(168,85,247,.5);color:#c4b5fd}
+  label{display:block;color:#9aa6b6;font-size:13px;margin:12px 0 6px}
+  input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a313d;background:#11151c;color:#e6eaf0;font-size:14px}
   .row{display:flex;gap:8px;align-items:stretch}
-  .btn-alt{padding:0 16px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#cbd5e1;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
-  .btn-alt:hover{border-color:rgba(255,255,255,.3)}
-  .hint{color:#64748b;font-size:12px;margin-top:5px}
-  .chk{display:flex;align-items:center;gap:8px;margin-top:14px;color:#cbd5e1;font-size:14px}
+  .btn-alt{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:transparent;color:#d3d9e2;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;text-decoration:none}
+  .btn-alt:hover{border-color:rgba(255,255,255,.34);background:rgba(255,255,255,.05)}
+  .hint{color:#7c899c;font-size:12px;margin-top:5px}
+  .chk{display:flex;align-items:center;gap:8px;margin-top:14px;color:#cdd5e0;font-size:14px}
   .chk input{width:auto}
-  .btn{margin-top:16px;padding:10px 18px;border-radius:12px;border:0;background:#7c3aed;color:#fff;font-weight:700;font-size:14px;cursor:pointer}
-  .btn:hover{background:#8b5cf6}
-  .btn-stop{padding:6px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#e2e8f0;font-size:13px;cursor:pointer}
+  .btn{margin-top:16px;padding:10px 18px;border-radius:12px;border:0;background:#8b5cf6;color:#fff;font-weight:700;font-size:14px;cursor:pointer}
+  .btn:hover{background:#a78bfa}
+  .btn-stop{padding:6px 13px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#e6eaf0;font-size:13px;cursor:pointer}
+  .btn-stop:hover{border-color:rgba(255,255,255,.32);background:rgba(255,255,255,.05)}
+  .btn-stop:disabled{opacity:.4;cursor:not-allowed}
   .err{color:#f87171;font-size:13px;margin-top:10px;min-height:16px}
-  h2{font-size:14px;font-weight:600;color:#94a3b8;letter-spacing:.04em;text-transform:uppercase;margin:26px 0 10px}
+  h2{font-size:13px;font-weight:600;color:#9aa6b6;letter-spacing:.05em;text-transform:uppercase;margin:26px 0 10px}
   table{width:100%;border-collapse:collapse}
-  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px}
-  th{color:#64748b;font-weight:500;font-size:12px}
+  th,td{text-align:left;padding:11px 8px;border-bottom:1px solid rgba(255,255,255,.07);font-size:14px}
+  th{color:#7c899c;font-weight:500;font-size:12px}
+  tr:last-child td{border-bottom:0}
   .mono{font-family:ui-monospace,monospace}
-  .empty{color:#64748b;padding:16px 8px}
-  pre{background:#0f172a;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px;height:280px;overflow:auto;font-size:12px;font-family:ui-monospace,monospace;color:#cbd5e1}
+  .empty{color:#7c899c;padding:16px 8px}
+  pre{background:#11151c;border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:12px;height:260px;overflow:auto;font-size:12px;font-family:ui-monospace,monospace;color:#cdd5e0}
   .hide{display:none}
 </style>`;
 
 const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>ZenithMC Host</title>${STYLE}</head><body>
-<div class="brand">${LOGO} ZenithMC Host</div>
+<div class="top">
+  <div class="brand">${LOGO} ZenithMC Host</div>
+  <a class="btn-alt" href="https://zenithurl.com" target="_blank" rel="noopener">Connector site ↗</a>
+</div>
 <p class="sub">Each server gets its own link: mc.zenithurl.com/&lt;name&gt; · build ${BUILD}</p>
 
 <div class="card">
@@ -173,25 +180,48 @@ function openBackups(){ if(selDetail) fetch('/api/open',{method:'POST',headers:{
 function renderDetail(){
   const d=selDetail; if(!d) return;
   const el=document.getElementById('detail'); el.classList.remove('hide');
-  const status = d.running ? '<span style="color:#34d399">● Online</span> · '+d.players+' player'+(d.players===1?'':'s') : '<span style="color:#94a3b8">Stopped</span>';
+  const status = d.running ? '<span style="color:#34d399">● Online</span> · '+d.players+' player'+(d.players===1?'':'s') : '<span style="color:#9aa6b6">Stopped</span>';
+  // version + upgrade
+  let versionLine, upgradeBtn='';
+  if(d.attached){
+    versionLine = 'Version '+d.version+' <span style="color:#7c899c">(attached — upgrade in Minecraft)</span>';
+  } else if(d.latestVersion && d.version===d.latestVersion){
+    versionLine = 'Version '+d.version+' <span style="color:#34d399">· latest</span>';
+  } else if(d.latestVersion){
+    versionLine = 'Version '+d.version+' <span style="color:#c4b5fd">· '+d.latestVersion+' available</span>';
+    upgradeBtn = '<button class="btn-stop" onclick="upgrade(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+'>Upgrade to '+d.latestVersion+'</button>';
+  } else {
+    versionLine = 'Version '+d.version;
+  }
   const backups = (d.backups&&d.backups.length)
-    ? d.backups.map(b=>'<div class="mono" style="font-size:12px;color:#94a3b8">'+b.name+' · '+(b.size/1048576).toFixed(1)+' MB</div>').join('')
+    ? d.backups.map(b=>'<div class="mono" style="font-size:12px;color:#9aa6b6">'+b.name+' · '+(b.size/1048576).toFixed(1)+' MB</div>').join('')
     : '<div class="hint">No backups yet.</div>';
   const startStop = d.running
     ? '<button class="btn-stop" onclick="stop(\\''+d.room+'\\')">Stop</button>'
     : '<button class="btn-stop" onclick="restart(\\''+d.room+'\\')">Start</button>';
   el.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-weight:700;font-size:16px">'+d.room+(d.private?' <span style="color:#64748b;font-size:11px">(private)</span>':'')+'</div><button class="btn-alt" onclick="closeDetail()">Close</button></div>'
-    +'<div style="font-size:13px;margin-bottom:4px">'+status+'</div>'
-    +'<label>Join link (share this)</label><div class="row"><input readonly value="'+d.joinUrl+'"><button class="btn-alt" onclick="copyJoin()">Copy</button></div>'
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-weight:700;font-size:16px">'+d.room+(d.private?' <span style="color:#7c899c;font-size:11px">(private)</span>':'')+'</div><button class="btn-alt" onclick="closeDetail()">Close</button></div>'
+    +'<div style="font-size:13px;margin-bottom:2px">'+status+'</div>'
+    +'<div style="font-size:13px;color:#cdd5e0;margin-bottom:4px">'+versionLine+'</div>'
+    +'<label>Join link (share this)</label><div class="row"><input readonly value="'+d.joinUrl+'"><button class="btn-alt" onclick="copyJoin()">Copy</button><a class="btn-alt" href="https://'+d.joinUrl+'" target="_blank" rel="noopener">Open</a></div>'
     +'<label>Stored location</label><div class="row"><input readonly value="'+d.dir+'"><button class="btn-alt" onclick="openDir()">Open</button></div>'
     +'<label>Backups</label>'+backups
     +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+startStop
     +'<button class="btn-stop" onclick="backup(\\''+d.room+'\\')">Back up now</button>'
     +'<button class="btn-stop" onclick="openBackups()">Open backups folder</button>'
+    +upgradeBtn
     +'<button class="btn-stop" onclick="privacy(\\''+d.room+'\\','+(!d.private)+')">'+(d.private?'Make public':'Make private')+'</button></div>'
     +'<label>Console</label><pre id="detail-log" style="height:200px"></pre>';
   updateDetailLog();
+}
+async function upgrade(room){
+  document.getElementById('msg').textContent='Upgrading '+room+'… (downloading the new server)';
+  const r = await fetch('/api/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
+  const j = await r.json().catch(()=>({}));
+  document.getElementById('msg').textContent = r.ok
+    ? (j.changed ? 'Upgraded to '+j.version+' — Start it to apply (the world migrates on first launch).' : 'Already on the latest ('+j.version+').')
+    : (j.error||'Upgrade failed.');
+  if(selRoom===room) openServer(room);
 }
 function updateDetailLog(){
   if(!selRoom) return;
@@ -301,6 +331,17 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
         const path = await manager.backup(JSON.parse(body || '{}').room);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ path }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/upgrade') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const result = await manager.upgrade(JSON.parse(body || '{}').room);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(result));
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: e.message }));

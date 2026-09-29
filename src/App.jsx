@@ -44,9 +44,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#06070a] text-slate-100 font-sans selection:bg-purple-500/30 antialiased">
+    <div className="min-h-screen bg-[#0d0f15] text-slate-100 font-sans selection:bg-purple-500/30 antialiased">
       {/* nav */}
-      <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#06070a]/80 backdrop-blur-xl">
+      <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#0d0f15]/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5 font-bold text-lg tracking-tight">
             <img src="/logo.svg" alt="ZenithMC" className="w-8 h-8" />

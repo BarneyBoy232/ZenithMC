@@ -34,12 +34,17 @@ if (!app.requestSingleInstanceLock()) {
     panel = startGuiServer({ port: PORT, baseDir: app.getPath('userData'), pickDirectory, openPath });
     win = new BrowserWindow({
       width: 920,
-      height: 700,
+      height: 760,
       title: 'ZenithMC Host',
-      backgroundColor: '#020617',
+      backgroundColor: '#0e1017',
       autoHideMenuBar: true,
     });
     win.loadURL(`http://127.0.0.1:${PORT}`);
+    // Open target="_blank" links (join links, the connector site) in the real browser.
+    win.webContents.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//.test(url)) shell.openExternal(url);
+      return { action: 'deny' };
+    });
   });
 
   // Stop all running servers cleanly when the app closes.

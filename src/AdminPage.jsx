@@ -42,7 +42,7 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans">
+    <div className="min-h-screen bg-[#0b0e14] text-slate-50 font-sans">
       <nav className="border-b border-slate-800 px-4 h-16 flex items-center gap-2 font-bold text-xl">
         <img src="/logo.svg" alt="ZenithMC" className="w-7 h-7" /> ZenithMC admin
       </nav>

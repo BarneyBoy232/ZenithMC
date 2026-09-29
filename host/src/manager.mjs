@@ -13,7 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { HostController } from './controller.mjs';
+import { ensurePaper, listVersions } from './mcServer.mjs';
 import { getDb, authReady, updateRoom } from '../../shared/firestoreSignaling.mjs';
+
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 let ROOT;
 try { ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'); } catch { ROOT = process.cwd(); }
@@ -183,12 +186,48 @@ export class ServerManager extends EventEmitter {
     return (k && k.dir) || join(this.baseDir, 'servers', room);
   }
 
+  /** The Minecraft version a server runs (remembered, or read from its paper.version). */
+  async versionFor(room) {
+    const k = this.known.get(room);
+    if (k && k.version) return k.version;
+    try {
+      const v = (await readFile(join(this.#dirFor(room), 'paper.version'), 'utf8')).trim();
+      if (v) return v;
+    } catch { /* no paper.version (attached server, maybe) */ }
+    return 'na';
+  }
+
+  /** Newest available Minecraft version, cached for an hour (network call). */
+  async latestVersion() {
+    if (this._latestVer && Date.now() - this._latestVerAt < 3600000) return this._latestVer;
+    try {
+      const vs = await listVersions();
+      if (vs && vs.length) { this._latestVer = vs[0]; this._latestVerAt = Date.now(); }
+    } catch { /* keep whatever we had */ }
+    return this._latestVer || null;
+  }
+
+  /** Next backup number for this server+version, e.g. fish(26.2-4) -> 4. */
+  async #nextBackupNumber(room, version) {
+    const backups = join(this.baseDir, 'backups');
+    const re = new RegExp(`^${escapeRe(room)}\\(${escapeRe(version)}-(\\d+)\\)\\.zip$`);
+    let max = 0;
+    try {
+      for (const f of await readdir(backups)) {
+        const m = f.match(re);
+        if (m) max = Math.max(max, Number(m[1]));
+      }
+    } catch { /* no backups dir yet */ }
+    return max + 1;
+  }
+
   /** Backup .zip files for one server, newest first. */
   async backupsFor(room) {
     const backups = join(this.baseDir, 'backups');
     try {
       const files = await readdir(backups);
-      const mine = files.filter((f) => f.startsWith(room + '-') && f.endsWith('.zip'));
+      // New scheme "name(version-N).zip" plus any older "name-stamp.zip".
+      const mine = files.filter((f) => (f.startsWith(room + '(') || f.startsWith(room + '-')) && f.endsWith('.zip'));
       const out = [];
       for (const f of mine) {
         const st = await stat(join(backups, f)).catch(() => null);
@@ -210,6 +249,9 @@ export class ServerManager extends EventEmitter {
       port: running ? running.port : null,
       players: running ? running.ctrl.players : 0,
       private: !!(k && k.private),
+      attached: !!(k && k.dir),
+      version: await this.versionFor(room),
+      latestVersion: await this.latestVersion(),
       dir: this.#dirFor(room),
       backupsDir: join(this.baseDir, 'backups'),
       joinUrl: `mc.zenithurl.com/${room}`,
@@ -218,10 +260,34 @@ export class ServerManager extends EventEmitter {
   }
 
   /**
-   * Zip a remembered server's folder to <baseDir>/backups/<room>-<stamp>.zip.
-   * Uses Windows' built-in tar (bsdtar), which writes .zip via -a. The bundled
-   * JRE is excluded — it's ~50 MB of re-downloadable runtime, not world data.
-   * Best done while the server is stopped so the world files are settled.
+   * Upgrade a ZenithMC-created server to the latest Minecraft version: download the
+   * new Paper jar now so the next start uses it (Minecraft migrates the world on
+   * first launch). Only for stopped, non-attached servers.
+   */
+  async upgrade(room) {
+    room = String(room || '').toLowerCase().trim();
+    const k = this.known.get(room);
+    if (!k) throw new Error('Unknown server — start it once first.');
+    if (k.dir) throw new Error('Upgrade only applies to servers ZenithMC created, not attached folders.');
+    if (this.servers.has(room)) throw new Error('Stop the server before upgrading.');
+    const latest = await this.latestVersion();
+    if (!latest) throw new Error("Couldn't reach the version list — check your connection.");
+    if (k.version === latest) return { version: latest, changed: false };
+
+    this.#push(room, `Upgrading to ${latest}… (downloading the new server)`);
+    await ensurePaper(this.#dirFor(room), latest); // downloads paper.jar + writes paper.version
+    k.version = latest;
+    await this.#saveKnown();
+    try { await authReady(); await updateRoom(getDb(), room, { version: latest }); } catch { /* offline */ }
+    this.#push(room, `Upgraded to ${latest}. Start it to apply (the world migrates on first launch).`);
+    return { version: latest, changed: true };
+  }
+
+  /**
+   * Zip a server's folder to <baseDir>/backups/<name>(<version>-<n>).zip, e.g.
+   * fish(26.2-4).zip — n counts up per server+version. Uses Windows' built-in tar
+   * (bsdtar), which writes .zip via -a. The bundled JRE (jre-*) is excluded — it's
+   * re-downloadable runtime, not world data. Best done while the server is stopped.
    */
   async backup(room) {
     room = String(room || '').toLowerCase().trim();
@@ -231,17 +297,19 @@ export class ServerManager extends EventEmitter {
 
     const backups = join(this.baseDir, 'backups');
     await mkdir(backups, { recursive: true });
-    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-    const out = join(backups, `${room}-${stamp}.zip`);
+    const version = await this.versionFor(room);
+    const n = await this.#nextBackupNumber(room, version);
+    const name = `${room}(${version}-${n}).zip`;
+    const out = join(backups, name);
     const folder = basename(dir);
 
     await new Promise((resolve, reject) => {
       // Run from the backups folder with a RELATIVE archive name: bsdtar parses a
       // "C:" drive prefix in -f as a remote host ("Cannot connect to C").
       const p = spawn('tar', [
-        '-a', '-cf', basename(out),
+        '-a', '-cf', name,
         '--exclude', `${folder}/jre`,
-        '--exclude', `${folder}/jre/*`,
+        '--exclude', `${folder}/jre-*`,
         '-C', dirname(dir), folder,
       ], { cwd: backups });
       let err = '';
