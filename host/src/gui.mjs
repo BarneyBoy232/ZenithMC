@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-09-29.1';
+const BUILD = '2026-09-29.2';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -203,7 +203,7 @@ function renderDetail(){
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-weight:700;font-size:16px">'+d.room+(d.private?' <span style="color:#7c899c;font-size:11px">(private)</span>':'')+'</div><button class="btn-alt" onclick="closeDetail()">Close</button></div>'
     +'<div style="font-size:13px;margin-bottom:2px">'+status+'</div>'
     +'<div style="font-size:13px;color:#cdd5e0;margin-bottom:4px">'+versionLine+'</div>'
-    +'<label>Join link (share this)</label><div class="row"><input readonly value="'+d.joinUrl+'"><button class="btn-alt" onclick="copyJoin()">Copy</button><a class="btn-alt" href="https://'+d.joinUrl+'" target="_blank" rel="noopener">Open</a></div>'
+    +'<label>Connector page — friends open this to join</label><div class="row"><input readonly value="'+d.joinUrl+'"><button class="btn-alt" onclick="copyJoin()">Copy</button><a class="btn-alt" href="https://'+d.joinUrl+'" target="_blank" rel="noopener">Open connector ↗</a></div>'
     +'<label>Stored location</label><div class="row"><input readonly value="'+d.dir+'"><button class="btn-alt" onclick="openDir()">Open</button></div>'
     +'<label>Backups</label>'+backups
     +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+startStop
@@ -237,7 +237,7 @@ async function tick(){
     const rows=[];
     for(const x of s.servers){
       const status = x.running ? ('<span style="color:#34d399">● Online</span> · '+x.players+' player'+(x.players===1?'':'s')) : '<span style="color:#94a3b8">Starting…</span>';
-      rows.push('<tr><td class="mono">'+x.room+'</td><td>'+status+'</td><td style="text-align:right"><button class="btn-stop" onclick="openServer(\\''+x.room+'\\')">Open</button> <button class="btn-stop" onclick="stop(\\''+x.room+'\\')">Stop</button></td></tr>');
+      rows.push('<tr><td class="mono">'+x.room+'</td><td>'+status+'</td><td style="text-align:right"><a class="btn-stop" style="text-decoration:none" href="https://mc.zenithurl.com/'+x.room+'" target="_blank" rel="noopener">Connector ↗</a> <button class="btn-stop" onclick="openServer(\\''+x.room+'\\')">Open</button> <button class="btn-stop" onclick="stop(\\''+x.room+'\\')">Stop</button></td></tr>');
     }
     for(const x of (s.previous||[])){
       const last = x.lastStarted ? ' · last run '+new Date(x.lastStarted).toLocaleString() : '';
