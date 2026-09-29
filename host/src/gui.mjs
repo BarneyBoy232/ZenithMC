@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-09-29.2';
+const BUILD = '2026-09-30.1';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -60,7 +60,7 @@ const STYLE = `<style>
 const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>ZenithMC Host</title>${STYLE}</head><body>
 <div class="top">
   <div class="brand">${LOGO} ZenithMC Host</div>
-  <a class="btn-alt" href="https://zenithurl.com" target="_blank" rel="noopener">Connector site ↗</a>
+  <a class="btn-alt" href="https://zenithurl.com" target="_blank" rel="noopener">ZenithMC site ↗</a>
 </div>
 <p class="sub">Each server gets its own link: mc.zenithurl.com/&lt;name&gt; · build ${BUILD}</p>
 
