@@ -8,7 +8,7 @@
 
 import net from 'node:net';
 import { spawn } from 'node:child_process';
-import { readFile, writeFile, mkdir, access, readdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, access, readdir, stat, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -319,6 +319,30 @@ export class ServerManager extends EventEmitter {
     });
     this.#push(room, `Backup saved: ${out}`);
     return out;
+  }
+
+  /**
+   * Delete a server: forget it locally, remove its public listing, and (for a
+   * ZenithMC-created server) delete its world folder. An attached server's own
+   * folder is never touched — we only drop it from the app. Backups are always
+   * kept. The server must be stopped first (so files aren't locked).
+   */
+  async delete(room) {
+    room = String(room || '').toLowerCase().trim();
+    const k = this.known.get(room);
+    if (!k && !this.servers.has(room)) throw new Error('Unknown server.');
+    if (this.servers.has(room)) throw new Error('Stop the server before deleting it.');
+    const attached = !!(k && k.dir);
+
+    try { await authReady(); await updateRoom(getDb(), room, { online: false, delisted: true }); } catch { /* offline — sweep/admin can finish it */ }
+    if (!attached) {
+      try { await rm(join(this.baseDir, 'servers', room), { recursive: true, force: true }); } catch { /* already gone */ }
+    }
+    this.known.delete(room);
+    await this.#saveKnown();
+    this.emit('change');
+    this.#push(room, attached ? 'Removed from ZenithMC (your folder was left untouched).' : 'Deleted — world files removed, backups kept.');
+    return { attached };
   }
 
   stop(room) { this.servers.get(String(room || '').toLowerCase().trim())?.ctrl.stop(); }

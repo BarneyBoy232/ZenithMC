@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-09-30.1';
+const BUILD = '2026-09-30.2';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -210,9 +210,21 @@ function renderDetail(){
     +'<button class="btn-stop" onclick="backup(\\''+d.room+'\\')">Back up now</button>'
     +'<button class="btn-stop" onclick="openBackups()">Open backups folder</button>'
     +upgradeBtn
-    +'<button class="btn-stop" onclick="privacy(\\''+d.room+'\\','+(!d.private)+')">'+(d.private?'Make public':'Make private')+'</button></div>'
+    +'<button class="btn-stop" onclick="privacy(\\''+d.room+'\\','+(!d.private)+')">'+(d.private?'Make public':'Make private')+'</button>'
+    +'<button class="btn-stop" onclick="delServer(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+' style="color:#f87171;border-color:rgba(248,113,113,.35)">Delete</button></div>'
     +'<label>Console</label><pre id="detail-log" style="height:200px"></pre>';
   updateDetailLog();
+}
+async function delServer(room){
+  const msg = 'Delete "'+room+'"?\\n\\nIt is removed from ZenithMC and taken off the public list. World files are deleted for servers ZenithMC created (attached folders are left alone). Backups are kept. This cannot be undone.';
+  if(!window.confirm(msg)) return;
+  document.getElementById('msg').textContent='Deleting '+room+'…';
+  const r = await fetch('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok){ document.getElementById('msg').textContent=j.error||'Delete failed.'; return; }
+  document.getElementById('msg').textContent='Deleted '+room+'.';
+  if(selRoom===room) closeDetail();
+  tick();
 }
 async function upgrade(room){
   document.getElementById('msg').textContent='Upgrading '+room+'… (downloading the new server)';
@@ -340,6 +352,17 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
       let body = ''; for await (const c of req) body += c;
       try {
         const result = await manager.upgrade(JSON.parse(body || '{}').room);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/delete') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const result = await manager.delete(JSON.parse(body || '{}').room);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(result));
       } catch (e) {
