@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-09-30.2';
+const BUILD = '2026-09-30.3';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -75,6 +75,12 @@ const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>Zeni
     <input id="n-room" placeholder="my-world">
     <label>Minecraft version</label>
     <select id="n-version"><option value="1.21.11">1.21.11</option></select>
+    <label>Location <span style="color:#7c899c">(optional)</span></label>
+    <div class="row">
+      <input id="n-location" placeholder="Default — the app's data folder">
+      <button class="btn-alt" onclick="browseLoc()">Browse…</button>
+    </div>
+    <div class="hint">Where this server's folder is created. Leave blank to use the default; or pick any drive/folder (e.g. a bigger disk).</div>
     <label class="chk"><input type="checkbox" id="n-public" checked> List publicly on mc.zenithurl.com</label>
     <button class="btn" onclick="startNew()">Start new server</button>
   </div>
@@ -117,7 +123,7 @@ async function post(body){
   const r = await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){ const e=await r.json().catch(()=>({})); document.getElementById('err').textContent=e.error||'Failed to start.'; }
 }
-function startNew(){ post({ room:document.getElementById('n-room').value, version:document.getElementById('n-version').value||undefined, public:document.getElementById('n-public').checked }); }
+function startNew(){ post({ room:document.getElementById('n-room').value, version:document.getElementById('n-version').value||undefined, location:document.getElementById('n-location').value.trim().replace(/^["']+|["']+$/g,'')||undefined, public:document.getElementById('n-public').checked }); }
 function startExisting(){
   const d = document.getElementById('e-dir').value.trim().replace(/^["']+|["']+$/g,'');
   post({ dir:d, public:document.getElementById('e-public').checked });
@@ -129,10 +135,19 @@ async function browse(){
     if(j.dir) document.getElementById('e-dir').value = j.dir;
   }catch(e){}
 }
+async function browseLoc(){
+  try{
+    const r = await fetch('/api/pick-dir',{method:'POST'});
+    const j = await r.json();
+    if(j.dir) document.getElementById('n-location').value = j.dir;
+  }catch(e){}
+}
+let allVersions=[];
 async function loadVersions(){
   try{
     const j = await (await fetch('/api/versions')).json();
     if(Array.isArray(j.versions) && j.versions.length){
+      allVersions = j.versions;
       document.getElementById('n-version').innerHTML =
         j.versions.map(v=>'<option value="'+v+'">'+v+'</option>').join('');
     }
@@ -181,17 +196,19 @@ function renderDetail(){
   const d=selDetail; if(!d) return;
   const el=document.getElementById('detail'); el.classList.remove('hide');
   const status = d.running ? '<span style="color:#34d399">● Online</span> · '+d.players+' player'+(d.players===1?'':'s') : '<span style="color:#9aa6b6">Stopped</span>';
-  // version + upgrade
-  let versionLine, upgradeBtn='';
+  // version line + change-version control (handles both upgrade and downgrade)
+  let versionLine, verControl='';
   if(d.attached){
-    versionLine = 'Version '+d.version+' <span style="color:#7c899c">(attached — upgrade in Minecraft)</span>';
-  } else if(d.latestVersion && d.version===d.latestVersion){
-    versionLine = 'Version '+d.version+' <span style="color:#34d399">· latest</span>';
-  } else if(d.latestVersion){
-    versionLine = 'Version '+d.version+' <span style="color:#c4b5fd">· '+d.latestVersion+' available</span>';
-    upgradeBtn = '<button class="btn-stop" onclick="upgrade(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+'>Upgrade to '+d.latestVersion+'</button>';
+    versionLine = 'Version '+d.version+' <span style="color:#7c899c">(attached — manage the version in Minecraft)</span>';
   } else {
-    versionLine = 'Version '+d.version;
+    if(d.latestVersion && d.version===d.latestVersion) versionLine = 'Version '+d.version+' <span style="color:#34d399">· latest</span>';
+    else if(d.latestVersion) versionLine = 'Version '+d.version+' <span style="color:#c4b5fd">· '+d.latestVersion+' available</span>';
+    else versionLine = 'Version '+d.version;
+    const list = allVersions.length ? allVersions : [d.version];
+    const opts = list.map(v=>'<option value="'+v+'"'+(v===d.version?' selected':'')+'>'+v+(d.latestVersion&&v===d.latestVersion?' (latest)':'')+'</option>').join('');
+    verControl = '<label>Change Minecraft version</label><div class="row"><select id="ver-select"'+(d.running?' disabled':'')+'>'+opts+'</select>'
+      +'<button class="btn-alt" onclick="applyVersion(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+'>Apply</button></div>'
+      +'<div class="hint">Upgrade or downgrade — re-downloads the server jar. Downgrading below the version your world was made on can stop it loading, so back up first.</div>';
   }
   const backups = (d.backups&&d.backups.length)
     ? d.backups.map(b=>'<div class="mono" style="font-size:12px;color:#9aa6b6">'+b.name+' · '+(b.size/1048576).toFixed(1)+' MB</div>').join('')
@@ -205,13 +222,14 @@ function renderDetail(){
     +'<div style="font-size:13px;color:#cdd5e0;margin-bottom:4px">'+versionLine+'</div>'
     +'<label>Connector page — friends open this to join</label><div class="row"><input readonly value="'+d.joinUrl+'"><button class="btn-alt" onclick="copyJoin()">Copy</button><a class="btn-alt" href="https://'+d.joinUrl+'" target="_blank" rel="noopener">Open connector ↗</a></div>'
     +'<label>Stored location</label><div class="row"><input readonly value="'+d.dir+'"><button class="btn-alt" onclick="openDir()">Open</button></div>'
+    +verControl
     +'<label>Backups</label>'+backups
     +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+startStop
     +'<button class="btn-stop" onclick="backup(\\''+d.room+'\\')">Back up now</button>'
     +'<button class="btn-stop" onclick="openBackups()">Open backups folder</button>'
-    +upgradeBtn
     +'<button class="btn-stop" onclick="privacy(\\''+d.room+'\\','+(!d.private)+')">'+(d.private?'Make public':'Make private')+'</button>'
     +'<button class="btn-stop" onclick="delServer(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+' style="color:#f87171;border-color:rgba(248,113,113,.35)">Delete</button></div>'
+    +(d.running?'<label>Send a console command</label><div class="row"><input id="cmd-input" placeholder="whitelist add Steve" onkeydown="if(event.key===\\'Enter\\')sendCmd(\\''+d.room+'\\')"><button class="btn-alt" onclick="sendCmd(\\''+d.room+'\\')">Send</button></div><div class="hint">Runs on the server console. Try: whitelist add NAME · whitelist on · op NAME · gamemode creative NAME · say hello · time set day</div>':'')
     +'<label>Console</label><pre id="detail-log" style="height:200px"></pre>';
   updateDetailLog();
 }
@@ -226,14 +244,23 @@ async function delServer(room){
   if(selRoom===room) closeDetail();
   tick();
 }
-async function upgrade(room){
-  document.getElementById('msg').textContent='Upgrading '+room+'… (downloading the new server)';
-  const r = await fetch('/api/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room})});
+async function applyVersion(room){
+  const sel=document.getElementById('ver-select'); if(!sel) return;
+  const version=sel.value;
+  document.getElementById('msg').textContent='Setting '+room+' to '+version+'… (downloading the server)';
+  const r = await fetch('/api/set-version',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,version})});
   const j = await r.json().catch(()=>({}));
   document.getElementById('msg').textContent = r.ok
-    ? (j.changed ? 'Upgraded to '+j.version+' — Start it to apply (the world migrates on first launch).' : 'Already on the latest ('+j.version+').')
-    : (j.error||'Upgrade failed.');
+    ? (j.changed ? 'Set to '+j.version+' — Start it to apply (the world migrates on first launch).' : 'Already on '+j.version+'.')
+    : (j.error||'Failed to change version.');
   if(selRoom===room) openServer(room);
+}
+async function sendCmd(room){
+  const inp=document.getElementById('cmd-input'); if(!inp) return;
+  const cmd=inp.value.trim(); if(!cmd) return;
+  inp.value='';
+  const r = await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,cmd})});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); document.getElementById('msg').textContent=e.error||'Command failed.'; }
 }
 function updateDetailLog(){
   if(!selRoom) return;
@@ -309,7 +336,7 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
       let body = ''; for await (const c of req) body += c;
       try {
         const b = JSON.parse(body || '{}');
-        await manager.start({ room: b.room, version: b.version, dir: b.dir, isPrivate: b.public === false });
+        await manager.start({ room: b.room, version: b.version, dir: b.dir, location: b.location, isPrivate: b.public === false });
         res.writeHead(200); return res.end('{}');
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -348,10 +375,23 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
         return res.end(JSON.stringify({ error: e.message }));
       }
     }
-    if (req.method === 'POST' && url.pathname === '/api/upgrade') {
+    if (req.method === 'POST' && url.pathname === '/api/set-version') {
       let body = ''; for await (const c of req) body += c;
       try {
-        const result = await manager.upgrade(JSON.parse(body || '{}').room);
+        const b = JSON.parse(body || '{}');
+        const result = await manager.setVersion(b.room, b.version);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/command') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const b = JSON.parse(body || '{}');
+        const result = manager.command(b.room, b.cmd);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(result));
       } catch (e) {

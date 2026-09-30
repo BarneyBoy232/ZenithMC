@@ -42,7 +42,7 @@ export class HostController extends EventEmitter {
    * @param opts.dir  optional existing server directory to use as-is (attach an
    *                  existing world/server). Defaults to host/servers/<room>.
    */
-  async start({ room, port = 25565, mem = 2048, version = '1.21.11', isPrivate = false, dir } = {}) {
+  async start({ room, port = 25565, mem = 2048, version = '1.21.11', isPrivate = false, dir, attach } = {}) {
     if (this.mc) throw new Error('A server is already running.');
     room = normalizeRoom(room);
     if (!isValidRoom(room)) throw new Error('Invalid room name (letters, numbers, dashes; max 32).');
@@ -51,7 +51,11 @@ export class HostController extends EventEmitter {
     this.log = [];
     this.players = 0;
     const serverDir = dir || join(this.baseDir, 'servers', room);
-    const mc = new MinecraftServer({ name: room, dir: serverDir, port, memoryMb: mem, version, attach: !!dir });
+    // attach = run the folder's own jar as-is. Defaults to "attach when a dir was
+    // given" for old callers, but the manager now passes it explicitly so a NEW
+    // server created in a custom location still downloads Paper (attach=false).
+    const isAttach = attach ?? !!dir;
+    const mc = new MinecraftServer({ name: room, dir: serverDir, port, memoryMb: mem, version, attach: isAttach });
     const sessions = new SessionTracker();
     const db = getDb();
     await authReady(); // carry an identity on every write
@@ -91,6 +95,11 @@ export class HostController extends EventEmitter {
     });
 
     await mc.start();
+  }
+
+  /** Send a raw console command to the running server (e.g. "whitelist add Steve"). */
+  send(command) {
+    this.mc?.send(command);
   }
 
   stop() {

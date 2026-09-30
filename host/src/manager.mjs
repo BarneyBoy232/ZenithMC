@@ -128,16 +128,36 @@ export class ServerManager extends EventEmitter {
 
   state() { return { servers: this.list(), previous: this.previous(), log: this.log }; }
 
-  async start({ room, version, dir, isPrivate, mem } = {}) {
+  /**
+   * Start a server.
+   *   dir       — attach an EXISTING server folder (runs its own jar, as-is).
+   *   location  — parent folder to CREATE a new server in (Paper is downloaded into
+   *               <location>/<name>). Ignored when `dir` is given.
+   *   neither   — create in the default app location (<baseDir>/servers/<name>).
+   */
+  async start({ room, version, dir, location, isPrivate, mem } = {}) {
     // Explorer's "Copy as path" wraps the path in quotes; strip those + whitespace
     // so the folder actually resolves (otherwise the jar scan silently finds nothing).
     if (dir) dir = String(dir).trim().replace(/^["']+|["']+$/g, '');
+    if (location) location = String(location).trim().replace(/^["']+|["']+$/g, '');
     // When attaching an existing folder without a name, derive one from the folder.
     let r = String(room || '').toLowerCase().trim();
     if (!r && dir) {
       r = String(dir.split(/[\\/]/).filter(Boolean).pop() || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 32);
     }
     if (!r) throw new Error('Please enter a server name.');
+
+    const attach = !!dir;
+    let serverDir, storeDir;
+    if (attach) { serverDir = dir; storeDir = dir; }
+    else if (location) { serverDir = join(location, r); storeDir = serverDir; }
+    else { serverDir = join(this.baseDir, 'servers', r); storeDir = null; }
+
+    await this.#launch({ room: r, version, serverDir, attach, isPrivate, mem, storeDir });
+  }
+
+  /** The one place a server is actually spawned + remembered (start and restart share it). */
+  async #launch({ room: r, version, serverDir, attach, isPrivate, mem, storeDir }) {
     if (this.servers.has(r)) throw new Error('A server with that name is already running.');
     const used = new Set([...this.servers.values()].map((s) => s.port));
     const port = await findFreePort(25565, used);
@@ -150,7 +170,7 @@ export class ServerManager extends EventEmitter {
     this.emit('change');
 
     try {
-      await ctrl.start({ room: r, port, version, dir, isPrivate, mem });
+      await ctrl.start({ room: r, port, version, dir: serverDir, attach, isPrivate, mem });
     } catch (e) {
       this.servers.delete(r);
       this.emit('change');
@@ -160,7 +180,8 @@ export class ServerManager extends EventEmitter {
     // Remember it so it can be restarted from the GUI next time.
     this.known.set(r, {
       room: r,
-      dir: dir || null,
+      dir: storeDir,       // exact folder for attached/custom servers; null = default location
+      attached: !!attach,  // true = run its own jar, never our download/upgrade/delete target
       version: version || null,
       private: !!isPrivate,
       lastStarted: Date.now(),
@@ -172,13 +193,18 @@ export class ServerManager extends EventEmitter {
   async restart(room) {
     const k = this.known.get(String(room || '').toLowerCase().trim());
     if (!k) throw new Error('Unknown server — start it once first.');
-    await this.start({
+    await this.#launch({
       room: k.room,
-      dir: k.dir || undefined,
       version: k.version || undefined,
+      serverDir: this.#dirFor(k.room),
+      attach: this.#isAttached(k),
       isPrivate: !!k.private,
+      storeDir: k.dir || null,
     });
   }
+
+  /** Whether a remembered server is an attached (own-jar) folder vs a ZenithMC-created one. */
+  #isAttached(k) { return k ? (k.attached ?? !!k.dir) : false; }
 
   /** Resolve the folder a remembered server lives in. */
   #dirFor(room) {
@@ -249,7 +275,7 @@ export class ServerManager extends EventEmitter {
       port: running ? running.port : null,
       players: running ? running.ctrl.players : 0,
       private: !!(k && k.private),
-      attached: !!(k && k.dir),
+      attached: this.#isAttached(k),
       version: await this.versionFor(room),
       latestVersion: await this.latestVersion(),
       dir: this.#dirFor(room),
@@ -260,27 +286,29 @@ export class ServerManager extends EventEmitter {
   }
 
   /**
-   * Upgrade a ZenithMC-created server to the latest Minecraft version: download the
-   * new Paper jar now so the next start uses it (Minecraft migrates the world on
-   * first launch). Only for stopped, non-attached servers.
+   * Switch a ZenithMC-created server to any Minecraft version — up (upgrade) or down
+   * (downgrade). Downloads the matching Paper jar now so the next start uses it.
+   * Only for stopped, non-attached servers. Note: a world created on a newer version
+   * may not load on an older one, so the GUI warns to back up before downgrading.
    */
-  async upgrade(room) {
+  async setVersion(room, version) {
     room = String(room || '').toLowerCase().trim();
+    version = String(version || '').trim();
     const k = this.known.get(room);
     if (!k) throw new Error('Unknown server — start it once first.');
-    if (k.dir) throw new Error('Upgrade only applies to servers ZenithMC created, not attached folders.');
-    if (this.servers.has(room)) throw new Error('Stop the server before upgrading.');
-    const latest = await this.latestVersion();
-    if (!latest) throw new Error("Couldn't reach the version list — check your connection.");
-    if (k.version === latest) return { version: latest, changed: false };
+    if (this.#isAttached(k)) throw new Error('Version changes apply to servers ZenithMC created, not attached folders.');
+    if (this.servers.has(room)) throw new Error('Stop the server before changing its version.');
+    if (!/^\d+(\.\d+)+$/.test(version)) throw new Error('Pick a valid Minecraft version.');
+    const current = await this.versionFor(room);
+    if (version === current) return { version, changed: false };
 
-    this.#push(room, `Upgrading to ${latest}… (downloading the new server)`);
-    await ensurePaper(this.#dirFor(room), latest); // downloads paper.jar + writes paper.version
-    k.version = latest;
+    this.#push(room, `Switching to ${version}… (downloading the server)`);
+    await ensurePaper(this.#dirFor(room), version); // downloads paper.jar + writes paper.version
+    k.version = version;
     await this.#saveKnown();
-    try { await authReady(); await updateRoom(getDb(), room, { version: latest }); } catch { /* offline */ }
-    this.#push(room, `Upgraded to ${latest}. Start it to apply (the world migrates on first launch).`);
-    return { version: latest, changed: true };
+    try { await authReady(); await updateRoom(getDb(), room, { version }); } catch { /* offline */ }
+    this.#push(room, `Now set to ${version}. Start it to apply (the world migrates on first launch).`);
+    return { version, changed: true };
   }
 
   /**
@@ -332,17 +360,33 @@ export class ServerManager extends EventEmitter {
     const k = this.known.get(room);
     if (!k && !this.servers.has(room)) throw new Error('Unknown server.');
     if (this.servers.has(room)) throw new Error('Stop the server before deleting it.');
-    const attached = !!(k && k.dir);
+    const attached = this.#isAttached(k);
+    const dir = this.#dirFor(room);
 
     try { await authReady(); await updateRoom(getDb(), room, { online: false, delisted: true }); } catch { /* offline — sweep/admin can finish it */ }
     if (!attached) {
-      try { await rm(join(this.baseDir, 'servers', room), { recursive: true, force: true }); } catch { /* already gone */ }
+      try { await rm(dir, { recursive: true, force: true }); } catch { /* already gone */ }
     }
     this.known.delete(room);
     await this.#saveKnown();
     this.emit('change');
     this.#push(room, attached ? 'Removed from ZenithMC (your folder was left untouched).' : 'Deleted — world files removed, backups kept.');
     return { attached };
+  }
+
+  /**
+   * Send a console command to a running server (e.g. "whitelist add Steve", "op me",
+   * "say hello"). A leading slash is optional — the server console doesn't use it.
+   */
+  command(room, cmd) {
+    room = String(room || '').toLowerCase().trim();
+    const s = this.servers.get(room);
+    if (!s) throw new Error('That server is not running.');
+    const c = String(cmd || '').trim().replace(/^\/+/, '');
+    if (!c) throw new Error('Enter a command.');
+    s.ctrl.send(c);
+    this.#push(room, `> ${c}`);
+    return { sent: c };
   }
 
   stop(room) { this.servers.get(String(room || '').toLowerCase().trim())?.ctrl.stop(); }
