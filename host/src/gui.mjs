@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-09-30.3';
+const BUILD = '2026-10-06.1';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -216,12 +216,17 @@ function renderDetail(){
   const startStop = d.running
     ? '<button class="btn-stop" onclick="stop(\\''+d.room+'\\')">Stop</button>'
     : '<button class="btn-stop" onclick="restart(\\''+d.room+'\\')">Start</button>';
+  const missingBanner = d.missing
+    ? '<div style="margin:8px 0;padding:10px 12px;border-radius:10px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.35);color:#fca5a5;font-size:13px">Folder missing — it was moved or deleted. Relink it to its new location, or delete this server.</div>'
+    : '';
   el.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-weight:700;font-size:16px">'+d.room+(d.private?' <span style="color:#7c899c;font-size:11px">(private)</span>':'')+'</div><button class="btn-alt" onclick="closeDetail()">Close</button></div>'
-    +'<div style="font-size:13px;margin-bottom:2px">'+status+'</div>'
+    +'<div id="detail-status" style="font-size:13px;margin-bottom:2px">'+status+'</div>'
     +'<div style="font-size:13px;color:#cdd5e0;margin-bottom:4px">'+versionLine+'</div>'
+    +missingBanner
     +'<label>Connector page — friends open this to join</label><div class="row"><input readonly value="'+d.joinUrl+'"><button class="btn-alt" onclick="copyJoin()">Copy</button><a class="btn-alt" href="https://'+d.joinUrl+'" target="_blank" rel="noopener">Open connector ↗</a></div>'
-    +'<label>Stored location</label><div class="row"><input readonly value="'+d.dir+'"><button class="btn-alt" onclick="openDir()">Open</button></div>'
+    +'<label>Stored location</label><div class="row"><input readonly value="'+d.dir+'"><button class="btn-alt" onclick="openDir()">Open</button><button class="btn-alt" onclick="relinkServer(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+'>Relink…</button></div>'
+    +'<div class="hint">Moved or renamed the folder? Use Relink to point this server at its new location.</div>'
     +verControl
     +'<label>Backups</label>'+backups
     +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+startStop
@@ -229,8 +234,8 @@ function renderDetail(){
     +'<button class="btn-stop" onclick="openBackups()">Open backups folder</button>'
     +'<button class="btn-stop" onclick="privacy(\\''+d.room+'\\','+(!d.private)+')">'+(d.private?'Make public':'Make private')+'</button>'
     +'<button class="btn-stop" onclick="delServer(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+' style="color:#f87171;border-color:rgba(248,113,113,.35)">Delete</button></div>'
-    +(d.running?'<label>Send a console command</label><div class="row"><input id="cmd-input" placeholder="whitelist add Steve" onkeydown="if(event.key===\\'Enter\\')sendCmd(\\''+d.room+'\\')"><button class="btn-alt" onclick="sendCmd(\\''+d.room+'\\')">Send</button></div><div class="hint">Runs on the server console. Try: whitelist add NAME · whitelist on · op NAME · gamemode creative NAME · say hello · time set day</div>':'')
-    +'<label>Console</label><pre id="detail-log" style="height:200px"></pre>';
+    +'<label>Console — live server output</label><pre id="detail-log" style="height:200px"></pre>'
+    +(d.running?'<label>Send a command to the console above</label><div class="row"><input id="cmd-input" placeholder="whitelist add Steve" onkeydown="if(event.key===\\'Enter\\')sendCmd(\\''+d.room+'\\')"><button class="btn-alt" onclick="sendCmd(\\''+d.room+'\\')">Send</button></div><div class="hint">Try: whitelist add NAME · whitelist on · op NAME · gamemode creative NAME · say hello · time set day</div>':'');
   updateDetailLog();
 }
 async function delServer(room){
@@ -253,6 +258,16 @@ async function applyVersion(room){
   document.getElementById('msg').textContent = r.ok
     ? (j.changed ? 'Set to '+j.version+' — Start it to apply (the world migrates on first launch).' : 'Already on '+j.version+'.')
     : (j.error||'Failed to change version.');
+  if(selRoom===room) openServer(room);
+}
+async function relinkServer(room){
+  let dir=null;
+  try{ dir=(await (await fetch('/api/pick-dir',{method:'POST'})).json()).dir; }catch(e){}
+  if(!dir) return; // cancelled
+  document.getElementById('msg').textContent='Relinking '+room+'…';
+  const r = await fetch('/api/relink',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,dir})});
+  const j = await r.json().catch(()=>({}));
+  document.getElementById('msg').textContent = r.ok ? 'Relinked '+room+' to '+j.dir : (j.error||'Relink failed.');
   if(selRoom===room) openServer(room);
 }
 async function sendCmd(room){
@@ -285,6 +300,21 @@ async function tick(){
     }
     document.getElementById('rows').innerHTML = rows.length ? rows.join('') : '<tr><td class="empty" colspan="3">No servers yet — create one above.</td></tr>';
     document.getElementById('log').textContent=s.log.join('\\n');
+    // Live-update the open detail panel's online/player count from the same poll,
+    // without re-rendering the whole panel (which would wipe a half-typed command).
+    if(selRoom){
+      const st=document.getElementById('detail-status');
+      if(st){
+        const live=s.servers.find(x=>x.room===selRoom);
+        if(live&&live.running){
+          st.innerHTML='<span style="color:#34d399">● Online</span> · '+live.players+' player'+(live.players===1?'':'s');
+          if(selDetail){ selDetail.running=true; selDetail.players=live.players; }
+        } else {
+          st.innerHTML='<span style="color:#9aa6b6">Stopped</span>';
+          if(selDetail&&selDetail.running){ selDetail.running=false; openServer(selRoom); } // transitioned to stopped — refresh controls once
+        }
+      }
+    }
     updateDetailLog();
   }catch(e){}
 }
@@ -380,6 +410,18 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
       try {
         const b = JSON.parse(body || '{}');
         const result = await manager.setVersion(b.room, b.version);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/relink') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const b = JSON.parse(body || '{}');
+        const result = await manager.relink(b.room, b.dir);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(result));
       } catch (e) {

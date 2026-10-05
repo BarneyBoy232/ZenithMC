@@ -63,24 +63,28 @@ export class ServerManager extends EventEmitter {
   }
 
   /**
-   * A remembered server whose folder no longer exists (deleted/moved) is gone for
-   * good — delist it from the site and forget it locally. Local forget happens
-   * only after the delist write succeeds, so a temporary network failure just
-   * retries on the next sweep instead of leaving a ghost listing forever.
+   * A remembered server whose folder no longer exists (deleted/moved) is delisted
+   * from the public site and flagged `missing` — but KEPT in the app so the user can
+   * relink it to its new location (or delete it) from the GUI. If the folder comes
+   * back (e.g. after a relink), the flag clears on the next sweep.
    */
   async sweepMissing() {
     for (const k of [...this.known.values()]) {
       if (this.servers.has(k.room)) continue; // running — clearly still exists
       const dir = k.dir || join(this.baseDir, 'servers', k.room);
       const missing = await access(dir).then(() => false, () => true);
-      if (!missing) continue;
+      if (!missing) {
+        if (k.missing) { k.missing = false; await this.#saveKnown(); this.emit('change'); }
+        continue;
+      }
+      if (k.missing) continue; // already flagged and delisted
       try {
         const db = getDb();
         await authReady();
         await updateRoom(db, k.room, { online: false, delisted: true });
-        this.known.delete(k.room);
+        k.missing = true;
         await this.#saveKnown();
-        this.#push(k.room, `Folder gone (${dir}) — removed from the site listing.`);
+        this.#push(k.room, `Folder gone (${dir}) — delisted. Relink it to a folder or delete it.`);
         this.emit('change');
       } catch { /* offline — retry next sweep */ }
     }
@@ -182,11 +186,33 @@ export class ServerManager extends EventEmitter {
       room: r,
       dir: storeDir,       // exact folder for attached/custom servers; null = default location
       attached: !!attach,  // true = run its own jar, never our download/upgrade/delete target
+      missing: false,      // folder confirmed present (it just started)
       version: version || null,
       private: !!isPrivate,
       lastStarted: Date.now(),
     });
     await this.#saveKnown();
+  }
+
+  /**
+   * Point a remembered server at a different folder — e.g. after the user moved or
+   * renamed its folder, or restored it somewhere new. Must be stopped. Keeps the
+   * server's identity (name, privacy, attached/created nature); only the path moves.
+   */
+  async relink(room, dir) {
+    room = String(room || '').toLowerCase().trim();
+    dir = String(dir || '').trim().replace(/^["']+|["']+$/g, '');
+    const k = this.known.get(room);
+    if (!k) throw new Error('Unknown server — start it once first.');
+    if (this.servers.has(room)) throw new Error('Stop the server before relinking its folder.');
+    if (!dir) throw new Error('Pick a folder.');
+    await access(dir).catch(() => { throw new Error(`That folder does not exist: ${dir}`); });
+    k.dir = dir;
+    k.missing = false;
+    await this.#saveKnown();
+    this.#push(room, `Relinked to ${dir}. Start it to go live again.`);
+    this.emit('change');
+    return { dir };
   }
 
   /** Restart a remembered server with the settings it last ran with. */
@@ -269,6 +295,9 @@ export class ServerManager extends EventEmitter {
     const running = this.servers.get(room);
     const k = this.known.get(room);
     if (!running && !k) throw new Error('Unknown server.');
+    const dir = this.#dirFor(room);
+    // Live folder-existence check (stopped servers only — a running one clearly exists).
+    const missing = running ? false : await access(dir).then(() => false, () => true);
     return {
       room,
       running: !!running,
@@ -276,9 +305,10 @@ export class ServerManager extends EventEmitter {
       players: running ? running.ctrl.players : 0,
       private: !!(k && k.private),
       attached: this.#isAttached(k),
+      missing,
       version: await this.versionFor(room),
       latestVersion: await this.latestVersion(),
-      dir: this.#dirFor(room),
+      dir,
       backupsDir: join(this.baseDir, 'backups'),
       joinUrl: `mc.zenithurl.com/${room}`,
       backups: await this.backupsFor(room),

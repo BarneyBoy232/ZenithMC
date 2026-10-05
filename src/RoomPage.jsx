@@ -112,7 +112,7 @@ export default function RoomPage({ room }) {
 
         {online ? (
           !pasteAddr ? (
-            <Step n={1} title="Connect">
+            <Step title="Connect">
               {hasConnector === null ? (
                 <p className="text-slate-500 text-sm animate-pulse">Checking for your connector…</p>
               ) : hasConnector === false ? (
@@ -149,7 +149,7 @@ export default function RoomPage({ room }) {
               )}
             </Step>
           ) : (
-            <Step n={2} title="Paste into Minecraft">
+            <Step title="Paste into Minecraft">
               <p className="text-slate-400 text-sm mb-4">
                 Direct link established. In Minecraft → Multiplayer → Add Server, paste this address:
               </p>
@@ -181,13 +181,10 @@ export default function RoomPage({ room }) {
   );
 }
 
-function Step({ n, title, children }) {
+function Step({ title, children }) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 mb-6">
-      <div className="flex items-center gap-3 mb-4">
-        <span className="w-8 h-8 rounded-full bg-purple-500 text-white font-bold flex items-center justify-center">{n}</span>
-        <h3 className="font-bold text-lg">{title}</h3>
-      </div>
+      <h3 className="font-bold text-lg mb-4">{title}</h3>
       {children}
     </div>
   );

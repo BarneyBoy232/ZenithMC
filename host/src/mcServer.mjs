@@ -257,12 +257,17 @@ export class MinecraftServer extends EventEmitter {
         this.ready = true;
         this.emit('ready');
       }
-      const joined = line.match(/]: (\w+) joined the game/);
+      // Paper logs joins/leaves as "…]: Steve joined the game" on older builds and
+      // "…]: System chat: Steve joined the game" on newer ones (26.x). Match the
+      // username right before "joined/left the game" regardless of any prefix, so
+      // the live player count actually tracks (the old `]: (\w+)` anchor missed the
+      // "System chat:" form and the counter stayed stuck at 0).
+      const joined = line.match(/(\w{1,16}) joined the game/);
       if (joined) {
         this.players.add(joined[1]);
         this.emit('player-join', { name: joined[1], count: this.players.size });
       }
-      const left = line.match(/]: (\w+) left the game/);
+      const left = line.match(/(\w{1,16}) left the game/);
       if (left) {
         this.players.delete(left[1]);
         this.emit('player-leave', { name: left[1], count: this.players.size });
