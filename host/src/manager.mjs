@@ -8,7 +8,7 @@
 
 import net from 'node:net';
 import os from 'node:os';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { readFile, writeFile, mkdir, access, readdir, stat, rm, copyFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
@@ -51,8 +51,34 @@ export class ServerManager extends EventEmitter {
   #knownPath() { return join(this.baseDir, 'servers.json'); }
   #settingsPath() { return join(this.baseDir, 'settings.json'); }
 
+  /**
+   * Kill Minecraft server processes left over from a previous session (a crash or a
+   * force-close that skipped our clean shutdown). At app startup nothing we manage is
+   * legitimately running yet, so any `java.exe` launched the way we launch servers
+   * (`-jar <paper|server>.jar --nogui`) is an orphan — and a live orphan keeps its
+   * world's `session.lock` held, which makes the next start fail with
+   * "another process has locked a portion of the file". Reaping them here prevents that.
+   */
+  #reapOrphans() {
+    if (process.platform !== 'win32') return;
+    try {
+      const ps = "Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | "
+        + "Where-Object { $_.CommandLine -match '--nogui' -and $_.CommandLine -match '-jar' -and $_.CommandLine -match 'paper\\.jar|server\\.jar' } | "
+        + 'ForEach-Object { $_.ProcessId }';
+      const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', timeout: 8000 });
+      const pids = String(r.stdout || '').split(/\r?\n/).map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
+      for (const pid of pids) {
+        try {
+          spawnSync('taskkill', ['/F', '/PID', pid]);
+          this.#push('cleanup', `Stopped a leftover server process (pid ${pid}) from a previous session so its world unlocks.`);
+        } catch { /* ignore */ }
+      }
+    } catch { /* best effort — never block startup */ }
+  }
+
   /** Load remembered servers + app settings from disk. Call after baseDir is final. */
   async loadKnown() {
+    this.#reapOrphans(); // clear crash/force-close leftovers before anything can clash on a world lock
     try {
       const arr = JSON.parse(await readFile(this.#knownPath(), 'utf8'));
       for (const k of arr) if (k?.room) this.known.set(k.room, k);
