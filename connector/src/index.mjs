@@ -53,8 +53,22 @@ export async function startConnector({ room = ROOM, preferredLocal = PREFERRED_L
   });
 
   const localPort = await findFreePort(preferredLocal);
-  const server = net.createServer((sock) => friend.attach(sock));
-  await new Promise((r) => server.listen(localPort, '127.0.0.1', r));
+  const onConn = (sock) => friend.attach(sock);
+
+  // Listen on BOTH loopback stacks. Windows resolves "localhost" to ::1 (IPv6) on
+  // some machines and 127.0.0.1 (IPv4) on others; a client that reaches for the stack
+  // we don't serve gets "Connection refused: getsockopt". Binding 127.0.0.1 AND ::1
+  // (same port) makes plain "localhost" work everywhere. The IPv6 bind is best-effort
+  // (some systems have no ::1) — IPv4 alone still serves 127.0.0.1.
+  const server4 = net.createServer(onConn);
+  await new Promise((resolve, reject) => { server4.once('error', reject); server4.listen(localPort, '127.0.0.1', resolve); });
+  let server6 = null;
+  try {
+    const s6 = net.createServer(onConn);
+    await new Promise((resolve, reject) => { s6.once('error', reject); s6.listen(localPort, '::1', resolve); });
+    server6 = s6;
+  } catch { server6 = null; /* no IPv6 loopback — 127.0.0.1 still works */ }
+  const server = { close() { try { server4.close(); } catch { /* closed */ } try { server6?.close(); } catch { /* closed */ } } };
 
   return { localPort, session, server, signaling, friend };
 }
