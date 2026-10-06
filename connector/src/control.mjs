@@ -38,22 +38,39 @@ export function startControlServer({ port = CONTROL_PORT } = {}) {
 
     if (req.method === 'GET' && url.pathname === '/status') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ running: true, rooms: [...active.keys()] }));
+      return res.end(JSON.stringify({ running: true, rooms: [...active.entries()].filter(([, c]) => c.alive).map(([r]) => r) }));
     }
 
     if (req.method === 'POST' && url.pathname === '/connect') {
       const { room } = await readJson(req);
       if (!room) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'room required' })); }
-      if (active.has(room)) {
+      // Reuse a link only if it's still live. If the host restarted (or the P2P link
+      // dropped), the cached one is dead — tear it down and re-dial, so a stale local
+      // port can never leave the user stranded on a connection timeout.
+      const existing = active.get(room);
+      if (existing && existing.alive) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(active.get(room)));
+        return res.end(JSON.stringify({ localPort: existing.localPort }));
+      }
+      if (existing) {
+        try { existing.server.close(); } catch { /* already closed */ }
+        try { existing.friend?.pc?.close(); } catch { /* already closed */ }
+        active.delete(room);
       }
       try {
-        const { localPort } = await startConnector({ room });
-        const info = { localPort };
-        active.set(room, info);
+        const conn = await startConnector({ room });
+        conn.alive = true;
+        // Evict the moment the direct link drops, so the next /connect re-dials fresh.
+        const markDead = () => {
+          if (!conn.alive) return;
+          conn.alive = false;
+          try { conn.server.close(); } catch { /* already closed */ }
+          if (active.get(room) === conn) active.delete(room);
+        };
+        try { conn.friend.pc.onStateChange((st) => { if (st === 'disconnected' || st === 'failed' || st === 'closed') markDead(); }); } catch { /* ignore */ }
+        active.set(room, conn);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(info));
+        return res.end(JSON.stringify({ localPort: conn.localPort }));
       } catch (e) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: e.message }));
