@@ -9,7 +9,7 @@
 import net from 'node:net';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
-import { readFile, writeFile, mkdir, access, readdir, stat, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, access, readdir, stat, rm, copyFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -335,18 +335,46 @@ export class ServerManager extends EventEmitter {
     return (k && k.dir) || join(this.baseDir, 'servers', room);
   }
 
+  /** The generic/shared app backups folder — a backup always lands here for safety
+   *  whenever a server lives in a custom location. */
+  #genericBackups() { return join(this.baseDir, 'backups'); }
+
+  /** The "SERVERNAME" folder that holds a custom server's data (and its backups).
+   *  New custom servers store data under <SERVERNAME>/serverdata, so the server
+   *  folder is its parent; older ones (pre-serverdata) keep data in <SERVERNAME>. */
+  #serverFolder(k) {
+    if (!k || !k.dir) return null;
+    return basename(k.dir) === 'serverdata' ? dirname(k.dir) : k.dir;
+  }
+
   /**
-   * Where a server's backups go:
-   *   1. an explicit per-server backup folder, if the user set one (decoupled); else
-   *   2. for a custom-location server, a `backups` folder beside its `serverdata`
-   *      (so the tree is  <serverfolder>/{serverdata,backups}); else
-   *   3. the shared app backups folder (<baseDir>/backups) for default + attached.
+   * The PRIMARY place a server's backups go (what the panel shows and lists):
+   *   1. an explicit per-server backup folder, if set (decoupled); else
+   *   2. for a custom-location server, <SERVERNAME>/backups (beside its data); else
+   *   3. the shared app backups folder (default-location + attached servers).
    */
   backupDirFor(room) {
     const k = this.known.get(room);
     if (k && k.backupDir) return k.backupDir;
-    if (k && !this.#isAttached(k) && k.dir) return join(dirname(k.dir), 'backups');
-    return join(this.baseDir, 'backups');
+    const sf = this.#serverFolder(k);
+    if (sf && !this.#isAttached(k)) return join(sf, 'backups');
+    return this.#genericBackups();
+  }
+
+  /**
+   * EVERY folder a backup is written to. The primary (above), plus — whenever the
+   * server lives in a custom location — the generic app folder as a safety copy.
+   * So: default/no-override → [generic]; default/override → [chosen]; custom/no-override
+   * → [SERVERNAME/backups, generic]; custom/override → [chosen, generic].
+   */
+  #backupDests(room) {
+    const k = this.known.get(room);
+    const primary = this.backupDirFor(room);
+    const generic = this.#genericBackups();
+    const serverIsCustom = !!(k && k.dir); // data lives outside the default app area
+    const dests = [primary];
+    if (serverIsCustom && primary !== generic) dests.push(generic);
+    return dests;
   }
 
   /** Point a server's backups at a specific folder (decoupled from its data folder). */
@@ -396,17 +424,19 @@ export class ServerManager extends EventEmitter {
     return this._latestVer || null;
   }
 
-  /** Next backup number for this server+version, e.g. fish(26.2-4) -> 4. */
-  async #nextBackupNumber(room, version) {
-    const backups = this.backupDirFor(room);
+  /** Next backup number for this server+version, e.g. fish(26.2-4) -> 4. Scans every
+   *  destination so the same filename is free in all of them (no clobbering a copy). */
+  async #nextBackupNumber(room, version, dests) {
     const re = new RegExp(`^${escapeRe(room)}\\(${escapeRe(version)}-(\\d+)\\)\\.zip$`);
     let max = 0;
-    try {
-      for (const f of await readdir(backups)) {
-        const m = f.match(re);
-        if (m) max = Math.max(max, Number(m[1]));
-      }
-    } catch { /* no backups dir yet */ }
+    for (const d of dests) {
+      try {
+        for (const f of await readdir(d)) {
+          const m = f.match(re);
+          if (m) max = Math.max(max, Number(m[1]));
+        }
+      } catch { /* dir not created yet */ }
+    }
     return max + 1;
   }
 
@@ -447,6 +477,7 @@ export class ServerManager extends EventEmitter {
       latestVersion: await this.latestVersion(),
       dir,
       backupsDir: this.backupDirFor(room),
+      backupExtra: this.#backupDests(room).slice(1), // extra safety copies (generic)
       backupCustom: !!(k && k.backupDir),
       ramPercent: this.ramPercentFor(room),
       ramMb: this.memoryMbFor(room),
@@ -496,30 +527,39 @@ export class ServerManager extends EventEmitter {
     const dir = this.#dirFor(room);
     await access(dir).catch(() => { throw new Error(`Server folder not found: ${dir}`); });
 
-    const backups = this.backupDirFor(room);
-    await mkdir(backups, { recursive: true });
+    const dests = this.#backupDests(room);           // one or more folders (primary [+ generic])
+    for (const d of dests) await mkdir(d, { recursive: true });
     const version = await this.versionFor(room);
-    const n = await this.#nextBackupNumber(room, version);
+    const n = await this.#nextBackupNumber(room, version, dests);
     const name = `${room}(${version}-${n}).zip`;
-    const out = join(backups, name);
     const folder = basename(dir);
 
+    // Zip once into the primary destination…
+    const primaryOut = join(dests[0], name);
     await new Promise((resolve, reject) => {
       // Run from the backups folder with a RELATIVE archive name: bsdtar parses a
-      // "C:" drive prefix in -f as a remote host ("Cannot connect to C").
+      // "C:" drive prefix in -f as a remote host ("Cannot connect to C"). Exclude
+      // the bundled JRE (re-downloadable) and any sibling backups folder.
       const p = spawn('tar', [
         '-a', '-cf', name,
         '--exclude', `${folder}/jre`,
         '--exclude', `${folder}/jre-*`,
+        '--exclude', `${folder}/backups`,
         '-C', dirname(dir), folder,
-      ], { cwd: backups });
+      ], { cwd: dests[0] });
       let err = '';
       p.stderr.on('data', (b) => { err += b; });
       p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Backup failed: ${err || 'tar exited ' + code}`))));
       p.on('error', reject);
     });
-    this.#push(room, `Backup saved: ${out}`);
-    return out;
+    // …then copy it to the other destinations (e.g. the generic safety folder).
+    for (const d of dests.slice(1)) {
+      try { await copyFile(primaryOut, join(d, name)); } catch { /* best-effort safety copy */ }
+    }
+    this.#push(room, dests.length > 1
+      ? `Backup saved: ${primaryOut} (+ safety copy in ${dests[dests.length - 1]})`
+      : `Backup saved: ${primaryOut}`);
+    return primaryOut;
   }
 
   /**

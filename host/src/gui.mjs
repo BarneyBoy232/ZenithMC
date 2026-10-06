@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-10-06.2';
+const BUILD = '2026-10-06.3';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -239,8 +239,9 @@ function renderDetail(){
     +'<label>Stored location</label><div class="row"><input readonly value="'+d.dir+'"><button class="btn-alt" onclick="openDir()">Open</button><button class="btn-alt" onclick="relinkServer(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+'>Relink…</button></div>'
     +'<div class="hint">Moved or renamed the folder? Use Relink to point this server at its new location.</div>'
     +verControl
-    +'<label>RAM share</label><div class="row"><input id="ram-pct" type="number" min="1" max="100" value="'+d.ramPercent+'" style="max-width:110px"><button class="btn-alt" onclick="setRam(\\''+d.room+'\\')">Apply</button><span class="hint" style="margin-top:9px">% of '+(d.ramTotalMb/1024).toFixed(1)+' GB budget = <b>'+d.ramMb+' MB</b> for this server</span></div><div class="hint">Takes effect on next start. Running servers together can\\'t exceed 100%.</div>'
+    +'<label>RAM share (% of the total budget)</label><div class="row"><input id="ram-pct" type="number" min="1" max="100" value="'+d.ramPercent+'" style="max-width:110px"><button class="btn-alt" onclick="setRam(\\''+d.room+'\\')">Apply</button></div><div class="hint">Takes effect on next start. Running servers together can\\'t exceed 100%.</div>'
     +'<label>Backups location'+(d.backupCustom?' <span style="color:#c4b5fd">(custom)</span>':'')+'</label><div class="row"><input readonly value="'+d.backupsDir+'"><button class="btn-alt" onclick="openBackups()">Open</button><button class="btn-alt" onclick="changeBackupDir(\\''+d.room+'\\')">Change…</button>'+(d.backupCustom?'<button class="btn-alt" onclick="resetBackupDir(\\''+d.room+'\\')">Reset</button>':'')+'</div>'
+    +((d.backupExtra&&d.backupExtra.length)?'<div class="hint">Also copied to '+d.backupExtra.join(', ')+' for safety (server is in a custom location).</div>':'')
     +'<label>Backups</label>'+backups
     +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+startStop
     +'<button class="btn-stop" onclick="backup(\\''+d.room+'\\')">Back up now</button>'
