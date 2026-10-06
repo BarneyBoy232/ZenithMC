@@ -10,7 +10,7 @@ import { listVersions } from './mcServer.mjs';
 const manager = new ServerManager();
 
 // Visible build stamp so it's obvious whether an installed app is stale.
-const BUILD = '2026-10-06.1';
+const BUILD = '2026-10-06.2';
 
 const LOGO = `<svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#120a1a" stroke="#a855f7" stroke-width="2"/>
@@ -96,6 +96,17 @@ const page = () => `<!doctype html><html><head><meta charset="utf-8"><title>Zeni
     <button class="btn" onclick="startExisting()">Attach and start</button>
   </div>
   <div class="err" id="err"></div>
+</div>
+
+<h2>App RAM</h2>
+<div class="card">
+  <label>Total RAM for all servers combined (GB)</label>
+  <div class="row">
+    <input id="ram-total" type="number" step="0.5" min="1" style="max-width:140px">
+    <button class="btn-alt" onclick="saveRam()">Save</button>
+    <span class="hint" id="ram-info" style="margin-top:9px"></span>
+  </div>
+  <div class="hint">Each server takes a percentage of this (set per server below). Running servers can't add up to more than 100%.</div>
 </div>
 
 <h2>Servers</h2>
@@ -228,10 +239,11 @@ function renderDetail(){
     +'<label>Stored location</label><div class="row"><input readonly value="'+d.dir+'"><button class="btn-alt" onclick="openDir()">Open</button><button class="btn-alt" onclick="relinkServer(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+'>Relink…</button></div>'
     +'<div class="hint">Moved or renamed the folder? Use Relink to point this server at its new location.</div>'
     +verControl
+    +'<label>RAM share</label><div class="row"><input id="ram-pct" type="number" min="1" max="100" value="'+d.ramPercent+'" style="max-width:110px"><button class="btn-alt" onclick="setRam(\\''+d.room+'\\')">Apply</button><span class="hint" style="margin-top:9px">% of '+(d.ramTotalMb/1024).toFixed(1)+' GB budget = <b>'+d.ramMb+' MB</b> for this server</span></div><div class="hint">Takes effect on next start. Running servers together can\\'t exceed 100%.</div>'
+    +'<label>Backups location'+(d.backupCustom?' <span style="color:#c4b5fd">(custom)</span>':'')+'</label><div class="row"><input readonly value="'+d.backupsDir+'"><button class="btn-alt" onclick="openBackups()">Open</button><button class="btn-alt" onclick="changeBackupDir(\\''+d.room+'\\')">Change…</button>'+(d.backupCustom?'<button class="btn-alt" onclick="resetBackupDir(\\''+d.room+'\\')">Reset</button>':'')+'</div>'
     +'<label>Backups</label>'+backups
     +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+startStop
     +'<button class="btn-stop" onclick="backup(\\''+d.room+'\\')">Back up now</button>'
-    +'<button class="btn-stop" onclick="openBackups()">Open backups folder</button>'
     +'<button class="btn-stop" onclick="privacy(\\''+d.room+'\\','+(!d.private)+')">'+(d.private?'Make public':'Make private')+'</button>'
     +'<button class="btn-stop" onclick="delServer(\\''+d.room+'\\')"'+(d.running?' disabled title="Stop the server first"':'')+' style="color:#f87171;border-color:rgba(248,113,113,.35)">Delete</button></div>'
     +'<label>Console — live server output</label><pre id="detail-log" style="height:200px"></pre>'
@@ -258,6 +270,44 @@ async function applyVersion(room){
   document.getElementById('msg').textContent = r.ok
     ? (j.changed ? 'Set to '+j.version+' — Start it to apply (the world migrates on first launch).' : 'Already on '+j.version+'.')
     : (j.error||'Failed to change version.');
+  if(selRoom===room) openServer(room);
+}
+async function loadSettings(){
+  try{
+    const s = await (await fetch('/api/settings')).json();
+    const inp = document.getElementById('ram-total');
+    if(inp && document.activeElement!==inp) inp.value = (s.ramTotalMb/1024).toFixed(1);
+    const info = document.getElementById('ram-info');
+    if(info) info.textContent = 'This PC has '+(s.systemMb/1024).toFixed(1)+' GB'+(s.isDefault?' · using default':'');
+  }catch(e){}
+}
+async function saveRam(){
+  const gb = parseFloat(document.getElementById('ram-total').value);
+  if(!(gb>0)){ document.getElementById('msg').textContent='Enter a RAM amount in GB.'; return; }
+  const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ramTotalMb:Math.round(gb*1024)})});
+  const j = await r.json().catch(()=>({}));
+  document.getElementById('msg').textContent = r.ok ? 'App RAM budget set to '+(j.ramTotalMb/1024).toFixed(1)+' GB.' : (j.error||'Failed to set RAM.');
+  loadSettings(); if(selRoom) openServer(selRoom);
+}
+async function setRam(room){
+  const pct = parseInt(document.getElementById('ram-pct').value,10);
+  const r = await fetch('/api/ram-percent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,percent:pct})});
+  const j = await r.json().catch(()=>({}));
+  document.getElementById('msg').textContent = r.ok ? 'RAM share for '+room+' set to '+j.percent+'% ('+j.mb+' MB) — applies on next start.' : (j.error||'Failed to set RAM share.');
+  if(selRoom===room) openServer(room);
+}
+async function changeBackupDir(room){
+  let dir=null; try{ dir=(await (await fetch('/api/pick-dir',{method:'POST'})).json()).dir; }catch(e){}
+  if(!dir) return;
+  const r = await fetch('/api/backup-dir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,dir})});
+  const j = await r.json().catch(()=>({}));
+  document.getElementById('msg').textContent = r.ok ? 'Backups for '+room+' → '+j.backupDir : (j.error||'Failed to set backup folder.');
+  if(selRoom===room) openServer(room);
+}
+async function resetBackupDir(room){
+  const r = await fetch('/api/backup-dir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,reset:true})});
+  const j = await r.json().catch(()=>({}));
+  document.getElementById('msg').textContent = r.ok ? 'Backups for '+room+' reset to default ('+j.backupDir+')' : (j.error||'Failed to reset.');
   if(selRoom===room) openServer(room);
 }
 async function relinkServer(room){
@@ -318,7 +368,7 @@ async function tick(){
     updateDetailLog();
   }catch(e){}
 }
-setInterval(tick,1000); tick(); loadVersions();
+setInterval(tick,1000); tick(); loadVersions(); loadSettings();
 </script></body></html>`;
 
 export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800), baseDir, pickDirectory, openPath } = {}) {
@@ -410,6 +460,45 @@ export function startGuiServer({ port = Number(process.env.ZMC_GUI_PORT ?? 7800)
       try {
         const b = JSON.parse(body || '{}');
         const result = await manager.setVersion(b.room, b.version);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'GET' && url.pathname === '/api/settings') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(manager.ramSettings()));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/settings') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const result = await manager.setRamTotal(JSON.parse(body || '{}').ramTotalMb);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/ram-percent') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const b = JSON.parse(body || '{}');
+        const result = await manager.setRamPercent(b.room, b.percent);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/backup-dir') {
+      let body = ''; for await (const c of req) body += c;
+      try {
+        const b = JSON.parse(body || '{}');
+        const result = b.reset ? await manager.clearBackupDir(b.room) : await manager.setBackupDir(b.room, b.dir);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(result));
       } catch (e) {

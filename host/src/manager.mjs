@@ -7,6 +7,7 @@
 // remembered server can be exported as a .zip backup.
 
 import net from 'node:net';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir, access, readdir, stat, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -41,25 +42,100 @@ export class ServerManager extends EventEmitter {
   constructor() {
     super();
     this.servers = new Map(); // room -> { room, port, ctrl }
-    this.known = new Map();   // room -> { room, dir|null, version|null, private, lastStarted }
+    this.known = new Map();   // room -> { room, dir|null, version|null, private, lastStarted, ramPercent, backupDir }
+    this.settings = {};       // app-wide settings (ramTotalMb) from settings.json
     this.log = [];
     this.baseDir = ROOT;
   }
 
   #knownPath() { return join(this.baseDir, 'servers.json'); }
+  #settingsPath() { return join(this.baseDir, 'settings.json'); }
 
-  /** Load remembered servers from disk. Call after baseDir is final. */
+  /** Load remembered servers + app settings from disk. Call after baseDir is final. */
   async loadKnown() {
     try {
       const arr = JSON.parse(await readFile(this.#knownPath(), 'utf8'));
       for (const k of arr) if (k?.room) this.known.set(k.room, k);
     } catch { /* first run — nothing saved yet */ }
+    try {
+      this.settings = JSON.parse(await readFile(this.#settingsPath(), 'utf8')) || {};
+    } catch { this.settings = {}; }
     // Watch for deleted folders: their site listing should disappear.
     this.sweepMissing();
     if (!this._sweepTimer) {
       this._sweepTimer = setInterval(() => this.sweepMissing(), 10 * 60 * 1000);
       this._sweepTimer.unref?.();
     }
+  }
+
+  // ---- RAM budget: one app-wide total, split across servers by percentage ----
+
+  /** Total MB on this machine. */
+  #systemMb() { return Math.floor(os.totalmem() / 1048576); }
+
+  /** Sensible default budget when the user hasn't set one: half of system RAM,
+   *  rounded down to a whole GB, clamped to [2 GB, system-2 GB]. */
+  #defaultRamTotal() {
+    const sys = this.#systemMb();
+    const half = Math.floor(sys / 2 / 1024) * 1024;
+    return Math.max(2048, Math.min(half, Math.max(2048, sys - 2048)));
+  }
+
+  /** The app-wide RAM budget in MB (user setting, or the computed default). */
+  ramTotal() {
+    const v = Number(this.settings.ramTotalMb);
+    return Number.isFinite(v) && v >= 1024 ? Math.round(v) : this.#defaultRamTotal();
+  }
+
+  /** A server's share of the budget (percent). Defaults to 50% if unset. */
+  ramPercentFor(room) {
+    const k = this.known.get(room);
+    const p = Number(k?.ramPercent);
+    return Number.isFinite(p) && p > 0 && p <= 100 ? p : 50;
+  }
+
+  /** A server's actual heap in MB = budget × its share. */
+  memoryMbFor(room) {
+    return Math.max(512, Math.round(this.ramTotal() * this.ramPercentFor(room) / 100));
+  }
+
+  /** Sum of RAM shares of currently-running servers (optionally excluding one). */
+  #runningPercent(exclude) {
+    let sum = 0;
+    for (const r of this.servers.keys()) if (r !== exclude) sum += this.ramPercentFor(r);
+    return sum;
+  }
+
+  async #saveSettings() {
+    try { await writeFile(this.#settingsPath(), JSON.stringify(this.settings, null, 2)); } catch { /* non-fatal */ }
+  }
+
+  /** App-wide RAM budget for the GUI settings panel. */
+  ramSettings() {
+    return { ramTotalMb: this.ramTotal(), systemMb: this.#systemMb(), defaultMb: this.#defaultRamTotal(), isDefault: !(Number(this.settings.ramTotalMb) >= 1024) };
+  }
+
+  /** Set the app-wide RAM budget (MB). */
+  async setRamTotal(mb) {
+    mb = Math.round(Number(mb));
+    if (!Number.isFinite(mb) || mb < 1024) throw new Error('RAM budget must be at least 1024 MB (1 GB).');
+    if (mb > this.#systemMb()) throw new Error(`That's more than this PC has (${(this.#systemMb() / 1024).toFixed(1)} GB installed).`);
+    this.settings.ramTotalMb = mb;
+    await this.#saveSettings();
+    return this.ramSettings();
+  }
+
+  /** Set a server's RAM share (percent of the budget). Applies on next start. */
+  async setRamPercent(room, percent) {
+    room = String(room || '').toLowerCase().trim();
+    const k = this.known.get(room);
+    if (!k) throw new Error('Unknown server — start it once first.');
+    percent = Math.round(Number(percent));
+    if (!Number.isFinite(percent) || percent < 1 || percent > 100) throw new Error('RAM share must be between 1% and 100%.');
+    k.ramPercent = percent;
+    await this.#saveKnown();
+    this.#push(room, `RAM share set to ${percent}% (${this.memoryMbFor(room)} MB). Takes effect on next start.`);
+    return { percent, mb: this.memoryMbFor(room) };
   }
 
   /**
@@ -139,7 +215,7 @@ export class ServerManager extends EventEmitter {
    *               <location>/<name>). Ignored when `dir` is given.
    *   neither   — create in the default app location (<baseDir>/servers/<name>).
    */
-  async start({ room, version, dir, location, isPrivate, mem } = {}) {
+  async start({ room, version, dir, location, isPrivate } = {}) {
     // Explorer's "Copy as path" wraps the path in quotes; strip those + whitespace
     // so the folder actually resolves (otherwise the jar scan silently finds nothing).
     if (dir) dir = String(dir).trim().replace(/^["']+|["']+$/g, '');
@@ -153,16 +229,33 @@ export class ServerManager extends EventEmitter {
 
     const attach = !!dir;
     let serverDir, storeDir;
-    if (attach) { serverDir = dir; storeDir = dir; }
-    else if (location) { serverDir = join(location, r); storeDir = serverDir; }
-    else { serverDir = join(this.baseDir, 'servers', r); storeDir = null; }
+    if (attach) {
+      serverDir = dir; storeDir = dir;
+    } else if (location) {
+      // Custom location → a self-contained tree:  <location>/<name>/serverdata (the
+      // Minecraft files) with <location>/<name>/backups alongside it. storeDir is the
+      // serverdata path; backupDirFor() derives the sibling backups folder from it.
+      serverDir = join(location, r, 'serverdata'); storeDir = serverDir;
+    } else {
+      serverDir = join(this.baseDir, 'servers', r); storeDir = null;
+    }
 
-    await this.#launch({ room: r, version, serverDir, attach, isPrivate, mem, storeDir });
+    await this.#launch({ room: r, version, serverDir, attach, isPrivate, storeDir });
   }
 
   /** The one place a server is actually spawned + remembered (start and restart share it). */
-  async #launch({ room: r, version, serverDir, attach, isPrivate, mem, storeDir }) {
+  async #launch({ room: r, version, serverDir, attach, isPrivate, storeDir }) {
     if (this.servers.has(r)) throw new Error('A server with that name is already running.');
+
+    // RAM budget: this server's share plus the shares of everything already running
+    // must fit within 100% of the app-wide budget.
+    const pct = this.ramPercentFor(r);
+    const inUse = this.#runningPercent(r);
+    if (inUse + pct > 100) {
+      throw new Error(`Not enough allocated RAM: running servers already use ${inUse}% of the budget and "${r}" needs ${pct}% (over 100%). Lower a server's RAM share, raise the app's total RAM, or stop a server.`);
+    }
+    const mem = this.memoryMbFor(r);
+
     const used = new Set([...this.servers.values()].map((s) => s.port));
     const port = await findFreePort(25565, used);
 
@@ -181,7 +274,9 @@ export class ServerManager extends EventEmitter {
       throw e;
     }
 
-    // Remember it so it can be restarted from the GUI next time.
+    // Remember it so it can be restarted from the GUI next time. Preserve any
+    // per-server RAM share / custom backup folder already set.
+    const prev = this.known.get(r) || {};
     this.known.set(r, {
       room: r,
       dir: storeDir,       // exact folder for attached/custom servers; null = default location
@@ -189,6 +284,8 @@ export class ServerManager extends EventEmitter {
       missing: false,      // folder confirmed present (it just started)
       version: version || null,
       private: !!isPrivate,
+      ramPercent: prev.ramPercent,   // keep the chosen share
+      backupDir: prev.backupDir,     // keep any custom backup location
       lastStarted: Date.now(),
     });
     await this.#saveKnown();
@@ -238,6 +335,46 @@ export class ServerManager extends EventEmitter {
     return (k && k.dir) || join(this.baseDir, 'servers', room);
   }
 
+  /**
+   * Where a server's backups go:
+   *   1. an explicit per-server backup folder, if the user set one (decoupled); else
+   *   2. for a custom-location server, a `backups` folder beside its `serverdata`
+   *      (so the tree is  <serverfolder>/{serverdata,backups}); else
+   *   3. the shared app backups folder (<baseDir>/backups) for default + attached.
+   */
+  backupDirFor(room) {
+    const k = this.known.get(room);
+    if (k && k.backupDir) return k.backupDir;
+    if (k && !this.#isAttached(k) && k.dir) return join(dirname(k.dir), 'backups');
+    return join(this.baseDir, 'backups');
+  }
+
+  /** Point a server's backups at a specific folder (decoupled from its data folder). */
+  async setBackupDir(room, dir) {
+    room = String(room || '').toLowerCase().trim();
+    dir = String(dir || '').trim().replace(/^["']+|["']+$/g, '');
+    const k = this.known.get(room);
+    if (!k) throw new Error('Unknown server — start it once first.');
+    if (!dir) throw new Error('Pick a folder.');
+    await access(dir).catch(() => { throw new Error(`That folder does not exist: ${dir}`); });
+    k.backupDir = dir;
+    await this.#saveKnown();
+    this.#push(room, `Backups will now go to ${dir}.`);
+    return { backupDir: dir };
+  }
+
+  /** Revert a server to the default backup location (beside its data, or the shared folder). */
+  async clearBackupDir(room) {
+    room = String(room || '').toLowerCase().trim();
+    const k = this.known.get(room);
+    if (!k) throw new Error('Unknown server — start it once first.');
+    delete k.backupDir;
+    await this.#saveKnown();
+    const d = this.backupDirFor(room);
+    this.#push(room, `Backups reset to the default location (${d}).`);
+    return { backupDir: d };
+  }
+
   /** The Minecraft version a server runs (remembered, or read from its paper.version). */
   async versionFor(room) {
     const k = this.known.get(room);
@@ -261,7 +398,7 @@ export class ServerManager extends EventEmitter {
 
   /** Next backup number for this server+version, e.g. fish(26.2-4) -> 4. */
   async #nextBackupNumber(room, version) {
-    const backups = join(this.baseDir, 'backups');
+    const backups = this.backupDirFor(room);
     const re = new RegExp(`^${escapeRe(room)}\\(${escapeRe(version)}-(\\d+)\\)\\.zip$`);
     let max = 0;
     try {
@@ -275,7 +412,7 @@ export class ServerManager extends EventEmitter {
 
   /** Backup .zip files for one server, newest first. */
   async backupsFor(room) {
-    const backups = join(this.baseDir, 'backups');
+    const backups = this.backupDirFor(room);
     try {
       const files = await readdir(backups);
       // New scheme "name(version-N).zip" plus any older "name-stamp.zip".
@@ -309,7 +446,11 @@ export class ServerManager extends EventEmitter {
       version: await this.versionFor(room),
       latestVersion: await this.latestVersion(),
       dir,
-      backupsDir: join(this.baseDir, 'backups'),
+      backupsDir: this.backupDirFor(room),
+      backupCustom: !!(k && k.backupDir),
+      ramPercent: this.ramPercentFor(room),
+      ramMb: this.memoryMbFor(room),
+      ramTotalMb: this.ramTotal(),
       joinUrl: `mc.zenithurl.com/${room}`,
       backups: await this.backupsFor(room),
     };
@@ -342,8 +483,10 @@ export class ServerManager extends EventEmitter {
   }
 
   /**
-   * Zip a server's folder to <baseDir>/backups/<name>(<version>-<n>).zip, e.g.
-   * fish(26.2-4).zip — n counts up per server+version. Uses Windows' built-in tar
+   * Zip a server's folder to <backupDir>/<name>(<version>-<n>).zip, e.g.
+   * fish(26.2-4).zip — n counts up per server+version. The backup folder is
+   * resolved by backupDirFor() (custom override, beside the data, or shared).
+   * Uses Windows' built-in tar
    * (bsdtar), which writes .zip via -a. The bundled JRE (jre-*) is excluded — it's
    * re-downloadable runtime, not world data. Best done while the server is stopped.
    */
@@ -353,7 +496,7 @@ export class ServerManager extends EventEmitter {
     const dir = this.#dirFor(room);
     await access(dir).catch(() => { throw new Error(`Server folder not found: ${dir}`); });
 
-    const backups = join(this.baseDir, 'backups');
+    const backups = this.backupDirFor(room);
     await mkdir(backups, { recursive: true });
     const version = await this.versionFor(room);
     const n = await this.#nextBackupNumber(room, version);
